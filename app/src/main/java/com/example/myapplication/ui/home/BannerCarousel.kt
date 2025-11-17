@@ -1,6 +1,8 @@
 package com.example.myapplication.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -11,30 +13,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import coil.request.ImageRequest
+import com.example.myapplication.data.preferences.SessionManager
+import com.example.myapplication.data.remote.network.RetrofitClient
 import com.google.accompanist.pager.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.util.Log
 
-val bannerImages  = listOf(
-        "https://www.udacity.com/blog/wp-content/uploads/2018/05/Kotlin-Udacity-Google.png",
-    "https://www.udacity.com/blog/wp-content/uploads/2018/05/Kotlin-Udacity-Google.png",
-    "https://www.udacity.com/blog/wp-content/uploads/2018/05/Kotlin-Udacity-Google.png"
-    )
+private const val TAG = "BannerCarousel"
 
+@OptIn(ExperimentalPagerApi::class)
 @Composable
 fun BannerCarousel() {
     val pagerState = rememberPagerState()
 
-    // State for images fetched from API
     var images by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    // Fetch banners from API on composition
+    fun normalizeUrl(url: String): String {
+        return url
+            .replace("http://localhost", "http://10.0.2.2")
+            .replace("http://127.0.0.1", "http://10.0.2.2")
+    }
+
     LaunchedEffect(Unit) {
-        // start auto scroll coroutine; launched child will be cancelled automatically with this scope
+
         launch {
             while (true) {
                 delay(4000)
@@ -45,69 +54,90 @@ fun BannerCarousel() {
             }
         }
 
-        // Por ahora comentamos la lógica de llamada al API y usamos las rutas estáticas definidas en `bannerImages`.
-        // Esto facilita pruebas locales y evita depender del endpoint remoto temporalmente.
-        /*
         try {
             isLoading = true
+            errorMsg = null
 
-            // obtain token from DataStore via UserPreferences
-            val userPreferences = UserPreferences(context)
-            val token = try { userPreferences.userToken.first() } catch (e: Exception) { "" }
+            val tokenProvider = { SessionManager.token }
+            val api = RetrofitClient.apiWithToken(tokenProvider)
 
-            val api = if (!token.isNullOrBlank()) {
-                RetrofitClient.apiWithToken { token }
-            } else {
-                RetrofitClient.apiWithoutToken
+            val response = try {
+                api.getEventosHoy()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error llamando eventos/hoy: ${e.message}")
+                errorMsg = "Error de conexión al obtener eventos"
+                null
             }
 
-            val response = api.getBanners()
-
-            if (response.isSuccessful) {
+            if (response != null && response.isSuccessful) {
                 val body = response.body()
-                val urls = body?.data?.mapNotNull { it.image_url }?.filter { it.isNotBlank() } ?: emptyList()
-                images = if (urls.isNotEmpty()) urls else bannerImages
+                if (body != null && body.success) {
+
+                    val urls = body.data.flatMap { evento ->
+                        evento.imagenes.mapNotNull { it.url_imagen }
+                    }.map { normalizeUrl(it) }
+
+                    images = urls
+
+                    if (images.isEmpty()) {
+                        errorMsg = "No hay imágenes para mostrar"
+                    }
+
+                } else {
+                    errorMsg = "Respuesta inválida del servidor"
+                }
             } else {
-                val errorBody = try { response.errorBody()?.string() } catch (e: Exception) { null }
-                errorMsg = "Error fetching banners: ${response.code()} ${response.message()} - ${errorBody ?: "no error body"}"
-                images = bannerImages
+                errorMsg = "Error al obtener eventos: ${response?.code() ?: "?"}"
             }
         } catch (e: Exception) {
-            errorMsg = e.localizedMessage ?: "Unknown error"
-            images = bannerImages
+            Log.e(TAG, "Error general: ${e.message}")
+            errorMsg = e.localizedMessage ?: "Error inesperado"
+            images = emptyList()
         } finally {
             isLoading = false
         }
-        */
-
-        // Uso temporal de las imágenes locales
-        images = bannerImages
-        isLoading = false
     }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp) // margen elegante
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // If still loading and no images yet, show a loader
-        if (isLoading && images.isEmpty()) {
+
+        // LOADING
+        if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f),
+                    .height(260.dp),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
             }
-        } else {
+        }
+
+        // SI NO HAY IMÁGENES
+        else if (images.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = errorMsg ?: "No hay banners disponibles", color = Color.Gray)
+            }
+        }
+
+        // SI HAY IMÁGENES
+        else {
             HorizontalPager(
                 count = images.size,
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f) // Relación 16:9 para evitar distorsión
+                    .height(260.dp)
             ) { page ->
+
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(6.dp),
@@ -115,25 +145,83 @@ fun BannerCarousel() {
                         .fillMaxSize()
                         .padding(4.dp)
                 ) {
-                    AsyncImage(
-                        model = images.getOrNull(page),
-                        contentDescription = "Banner $page",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+
+                    val url = images.getOrNull(page)
+                    val token = SessionManager.token
+
+                    if (url != null) {
+                        val builder = ImageRequest.Builder(LocalContext.current)
+                            .data(url)
+
+                        if (!token.isNullOrEmpty()) {
+                            builder.addHeader("Authorization", "Bearer $token")
+                        }
+
+                        val model = builder.build()
+
+                        SubcomposeAsyncImage(
+                            model = model,
+                            contentDescription = "Banner $page",
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp),
+                            loading = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            },
+                            error = {
+                                Log.w(TAG, "Coil failed to load $url")
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = "Error cargando imagen", color = Color.Red)
+                                }
+                            },
+                            success = {
+                                SubcomposeAsyncImageContent()
+                            }
+                        )
+
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(text = "No image", color = Color.Gray)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            HorizontalPagerIndicator(
-                pagerState = pagerState,
-                activeColor = Color.Red,
-                inactiveColor = Color.LightGray,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
 
-            // show error text if any
+                val pageCount = images.size
+
+                for (i in 0 until pageCount) {
+                    val isSelected = pagerState.currentPage == i
+
+                    Box(
+                        modifier = Modifier
+                            .size(if (isSelected) 10.dp else 8.dp)
+                            .padding(4.dp)
+                            .background(
+                                color = if (isSelected) Color.Red else Color.LightGray,
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+
             if (errorMsg != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(

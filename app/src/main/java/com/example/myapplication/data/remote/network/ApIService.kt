@@ -2,8 +2,8 @@ package com.example.myapplication.data.remote.network
 
 import com.example.myapplication.data.remote.dto.request.LoginRequest
 import com.example.myapplication.data.remote.dto.response.AttendanceResponse
-import com.example.myapplication.data.remote.dto.response.BannerResponse
 import com.example.myapplication.data.remote.dto.response.LoginResponse
+import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
 import com.google.gson.JsonElement
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -44,11 +44,15 @@ interface ApiService {
         @Query("per_page") perPage: Int = 15,
         @Query("status") status: String? = null,
         @Query("valid") valid: Int? = null
-    ): Response<BannerResponse>
+    ): Response<com.example.myapplication.data.remote.dto.response.BannerResponse>
 
     // Endpoint para obtener rutas del día (devuelve Json flexible)
     @GET("technicians/rutas-dia")
     suspend fun getRutasDia(
         @Query("emp_code") empCode: String
     ): Response<JsonElement>
+
+    // Nuevo endpoint: eventos hoy
+    @GET("eventos/hoy")
+    suspend fun getEventosHoy(): Response<EventosHoyResponse>
 }

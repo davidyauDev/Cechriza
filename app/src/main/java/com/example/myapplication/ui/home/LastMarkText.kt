@@ -38,7 +38,7 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             ),
             modifier = Modifier
-                .padding(vertical = 12.dp)
+                .padding(vertical = 5.dp)
                 .fillMaxWidth(),
             textAlign = TextAlign.Center
         )
