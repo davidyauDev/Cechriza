@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Deshabilita cleartext por defecto -->
-    <base-config cleartextTrafficPermitted="false" />
-
-    <!-- Permite cleartext solo para la dirección del emulador 10.0.2.2 -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.0.2.2</domain>
+        <domain includeSubdomains="true">172.19.0.17</domain>
     </domain-config>
 </network-security-config>
-

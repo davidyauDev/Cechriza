@@ -2,8 +2,8 @@ package com.example.myapplication.data.remote.network
 
 import com.example.myapplication.data.remote.dto.request.LoginRequest
 import com.example.myapplication.data.remote.dto.response.AttendanceResponse
-import com.example.myapplication.data.remote.dto.response.LoginResponse
 import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
+import com.example.myapplication.data.remote.dto.response.LoginResponseTotal
 import com.google.gson.JsonElement
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -17,7 +17,7 @@ import retrofit2.http.Query
 
 interface ApiService {
     @POST("login")
-    suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
+    suspend fun login(@Body request: LoginRequest): Response<LoginResponseTotal>
 
     @Multipart
     @POST("attendances")

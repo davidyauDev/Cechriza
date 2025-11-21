@@ -1,6 +1,12 @@
 package com.example.myapplication.data.remote.dto.response
 
-data class LoginResponse(
+data class LoginResponseTotal(
+    val success: Boolean,
+    val data: LoginResponseData,
+    val message: String
+)
+
+data class LoginResponseData(
     val access_token: String,
     val user: UserResponse
 )
@@ -9,6 +15,8 @@ data class UserResponse(
     val id: Int,
     val name: String,
     val email: String,
-    val roles: List<String> = emptyList(),
-    val emp_code: String? = null
+    val emp_code: String,
+    val role: String,
+    val active: Boolean,
+    val deleted_at: String?
 )

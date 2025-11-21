@@ -16,6 +16,7 @@ sealed class LoginState {
 }
 
 class LoginViewModel(private val repository: AuthRepository) : ViewModel() {
+
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)
     val loginState: StateFlow<LoginState> = _loginState
 
@@ -24,19 +25,27 @@ class LoginViewModel(private val repository: AuthRepository) : ViewModel() {
             _loginState.value = LoginState.Loading
             val result = repository.login(empCode, password)
             result.onSuccess { response ->
+
+                val data = response.data
+                val userResponse = data.user
+
                 val user = UserData(
-                    id = response.user.id,
-                    name = response.user.name,
-                    email = response.user.email,
-                    roles = response.user.roles ?: emptyList(),
-                    empCode = response.user.emp_code
+                    id = userResponse.id,
+                    name = userResponse.name,
+                    email = userResponse.email,
+                    roles = listOf(userResponse.role),
+                    empCode = userResponse.emp_code
                 )
-                val token = response.access_token
-                // Debug: log empCode from server
-                android.util.Log.d("LOGIN", "Login success: userId=${response.user.id}, emp_code=${response.user.emp_code}")
+
+                val token = data.access_token
+                android.util.Log.d(
+                    "LOGIN",
+                    "Login success: userId=${userResponse.id}, emp_code=${userResponse.emp_code}"
+                )
                 _loginState.value = LoginState.Success(user, token)
             }.onFailure { e ->
-                _loginState.value = LoginState.Error(e.message ?: "Error desconocido")
+                _loginState.value =
+                    LoginState.Error(e.message ?: "Error desconocido")
             }
         }
     }

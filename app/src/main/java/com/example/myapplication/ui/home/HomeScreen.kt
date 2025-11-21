@@ -469,9 +469,9 @@ fun HomeScreen(
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {
                             BannerCarousel()
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             LastMarkText(viewModel = attendanceViewModel)
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             EntryExitButtons(
                                 onEntry = { startAttendanceFlow(AttendanceType.ENTRADA) },
                                 onExit = { startAttendanceFlow(AttendanceType.SALIDA) },

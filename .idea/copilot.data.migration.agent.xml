@@ -4,6 +4,7 @@
     <option name="migrationStatus" value="IN_PROGRESS" />
     <option name="pendingSessionIds">
       <option value="0c1f6d6d-6d66-488a-9695-c31f0d212c1a" />
+      <option value="0cf1bd08-7728-416e-a26b-228414e68bfd" />
       <option value="0d3be764-df1d-4b7d-8706-34733d98d88f" />
       <option value="0f631d98-a520-4147-a7f2-ca6098b4ad12" />
       <option value="1bbeb840-1677-48b1-ad03-3b8fce94f91d" />
@@ -37,6 +38,13 @@
               <option value="c4cf40cc-c22f-4f18-b62e-1ec1463f430b" />
               <option value="cbdc9129-53f6-49a7-b97b-d825cf17b478" />
               <option value="f8941c5e-8a96-4b22-8009-0e9239a2d6b0" />
+            </set>
+          </value>
+        </entry>
+        <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd">
+          <value>
+            <set>
+              <option value="6288828a-c7ed-4558-ba4f-a4e7a2821933" />
             </set>
           </value>
         </entry>
@@ -221,8 +229,8 @@
         <entry key="cfbd2ff8-8923-4cae-8b07-e4ef1c789069">
           <value>
             <set>
-              <option value="98204ae9-ab6e-4335-849b-5431fd46d3c7" />
               <option value="612f0a75-6876-421b-ac77-3cafe37bf473" />
+              <option value="98204ae9-ab6e-4335-849b-5431fd46d3c7" />
             </set>
           </value>
         </entry>
@@ -259,16 +267,15 @@
     </option>
     <pendingWorkingSetItems>
       <entry key="0c1f6d6d-6d66-488a-9695-c31f0d212c1a" />
+      <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd">
+        <set>
+          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/data/remote/dto/response/LoginResponse.kt" />
+        </set>
+      </entry>
       <entry key="0d3be764-df1d-4b7d-8706-34733d98d88f" />
       <entry key="0f631d98-a520-4147-a7f2-ca6098b4ad12" />
       <entry key="1bbeb840-1677-48b1-ad03-3b8fce94f91d" />
-      <entry key="1fddcc36-0229-4978-9bad-bc90d714a2ff">
-        <set>
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/ui/home/BannerCarousel.kt" />
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/data/remote/network/ApIService.kt" />
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/data/remote/dto/response/EventosHoyResponse.kt" />
-        </set>
-      </entry>
+      <entry key="1fddcc36-0229-4978-9bad-bc90d714a2ff" />
       <entry key="2b1e399e-09d3-419a-95e2-7ffdbee63a4f" />
       <entry key="53b32707-8d62-424a-98e4-b9d7e1b576d2" />
       <entry key="563592d0-18a4-4c40-856c-e4a394c397df" />
@@ -280,11 +287,7 @@
       <entry key="afd2d191-9400-4aae-8ed2-7883f7073ade" />
       <entry key="cb34b1c2-c715-4692-9308-5bb52d3a7d2b" />
       <entry key="cbf32b16-4da4-4107-9dc1-f7ca6a4a6edd" />
-      <entry key="cfbd2ff8-8923-4cae-8b07-e4ef1c789069">
-        <set>
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myplication/ui/home/BannerCarousel.kt" />
-        </set>
-      </entry>
+      <entry key="cfbd2ff8-8923-4cae-8b07-e4ef1c789069" />
       <entry key="f969b42f-d222-42dd-a76f-a59de10361f1" />
       <entry key="f9f39a16-9c35-44fb-997f-5e2cc8854699" />
     </pendingWorkingSetItems>
