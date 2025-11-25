@@ -225,18 +225,13 @@ fun AttendanceCameraView(
                                     val faceWidthRatio = if (frameWidth > 0) faceWidth / frameWidth else 0f
                                     val faceHeightRatio = if (frameHeight > 0) faceHeight / frameHeight else 0f
 
-                                    // Márgenes: requerir que el bounding box esté completamente dentro del frame con un pequeño margen
-                                    val marginX = (frameWidth * 0.04f) // 4% margen horizontal (menos estricto)
-                                    val marginY = (frameHeight * 0.04f) // 4% margen vertical
-                                    val box = mainFace?.boundingBox
-                                    val insideHorizontally = box != null && box.left >= marginX && box.right <= (frameWidth - marginX)
-                                    val insideVertically = box != null && box.top >= marginY && box.bottom <= (frameHeight - marginY)
-
                                     // Umbrales menos estrictos: aceptar rostros que ocupen ~9% del ancho/alto
                                     val widthOk = faceWidthRatio >= 0.09f
                                     val heightOk = faceHeightRatio >= 0.09f
 
-                                    val detectedNow = (widthOk && heightOk && insideHorizontally && insideVertically)
+                                    // Se quita la validación de estar completamente dentro del marco para permitir capturas
+                                    // aunque el rostro no esté perfectamente centrado.
+                                    val detectedNow = (widthOk && heightOk)
 
                                     if (detectedNow) {
                                         consecutiveDetectedFrames += 1
@@ -379,7 +374,7 @@ fun AttendanceCameraView(
                     Toast.makeText(context, "❌ No se pudo capturar la imagen", Toast.LENGTH_SHORT).show()
                 }
             },
-            enabled = captureEnabled,
+            enabled = !captureEnabled,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp),

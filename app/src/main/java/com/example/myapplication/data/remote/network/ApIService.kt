@@ -39,12 +39,7 @@ interface ApiService {
         @Part photo: MultipartBody.Part
     ): Response<AttendanceResponse>
 
-    @GET("banners")
-    suspend fun getBanners(
-        @Query("per_page") perPage: Int = 15,
-        @Query("status") status: String? = null,
-        @Query("valid") valid: Int? = null
-    ): Response<com.example.myapplication.data.remote.dto.response.BannerResponse>
+
 
     // Endpoint para obtener rutas del día (devuelve Json flexible)
     @GET("technicians/rutas-dia")

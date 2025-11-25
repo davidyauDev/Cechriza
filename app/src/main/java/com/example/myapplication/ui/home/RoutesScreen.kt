@@ -56,10 +56,12 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                 var metaTotal: Int? = null
                 if (body != null && body.isJsonObject) {
                     val obj = body.asJsonObject
-                    // Buscar array de rutas en "data"
-                    val arrField = listOf("data", "routes", "items").firstOrNull { obj.has(it) }
-                    if (arrField != null && obj.get(arrField).isJsonArray) {
-                        for (el in obj.getAsJsonArray(arrField)) {
+
+                    val dataObj = obj.getAsJsonObject("data")
+                    val rutasArray = dataObj?.getAsJsonArray("rutas")
+
+                    if (rutasArray != null) {
+                        for (el in rutasArray) {
                             try {
                                 val o = el.asJsonObject
                                 parsed.add(
@@ -80,14 +82,14 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                             } catch (_: Exception) {}
                         }
                     }
-                    // Leer total de rutas si existe
-                    if (obj.has("meta") && obj.get("meta").isJsonObject) {
-                        val meta = obj.getAsJsonObject("meta")
-                        if (meta.has("total_rutas")) {
-                            metaTotal = meta.get("total_rutas").asInt
-                        }
+
+                    // Meta corregido
+                    val metaObj = dataObj?.getAsJsonObject("meta")
+                    if (metaObj?.has("total_rutas") == true) {
+                        metaTotal = metaObj.get("total_rutas").asInt
                     }
                 }
+
                 routes = parsed
                 totalRutas = metaTotal ?: parsed.size
                 isLoading = false
@@ -165,59 +167,116 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
 
             val context = LocalContext.current
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(12.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+
                 items(routes) { r ->
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { /* Navegar a detalle si se desea */ },
-                        elevation = CardDefaults.cardElevation(4.dp)
+                            .clickable { /* acción futura */ },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(1.dp),
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                        Column(
+                            modifier = Modifier
+                                .padding(16.dp)
+                        ) {
+
+                            // Número + estado
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
                                     text = r.number,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = r.estado,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
+
+                                Surface(
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        text = r.estado,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Fecha y hora
                             Text(
-                                text = "${r.fecha} ${r.hora}",
+                                text = "Fecha: ${r.fecha}   Hora: ${r.hora}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Spacer(Modifier.height(6.dp))
+
+                            // Agencia
                             Text(
                                 text = r.agencia,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Spacer(Modifier.height(4.dp))
+
+                            // Equipo y serie
                             Text(
-                                text = "Equipo: ${r.equipo}  |  Serie: ${r.serie}",
-                                style = MaterialTheme.typography.bodySmall
+                                text = "Equipo: ${r.equipo}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+
                             Text(
-                                text = "Servicio: ${r.topic}  |  Cliente: ${r.cliente}",
-                                style = MaterialTheme.typography.bodySmall
+                                text = "Serie: ${r.serie}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Spacer(Modifier.height(4.dp))
+
+                            // Servicio y cliente
+                            Text(
+                                text = "Servicio: ${r.topic}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Text(
+                                text = "Cliente: ${r.cliente}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+
+                            // Asunto destacado
                             Text(
                                 text = r.subject,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
+
+                            Spacer(Modifier.height(16.dp))
+
+                            // Botón profesional
+                            FilledTonalButton(
                                 onClick = {
                                     r.ticketId?.let { id ->
                                         val url = "http://161.132.75.22/system/formulario_ticket?id=$id"
@@ -233,6 +292,8 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                     }
                 }
             }
+
+
         }
     }
 }

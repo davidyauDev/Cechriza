@@ -44,6 +44,7 @@ fun BannerCarousel() {
 
     LaunchedEffect(Unit) {
 
+        // Auto-slide
         launch {
             while (true) {
                 delay(4000)
@@ -73,7 +74,8 @@ fun BannerCarousel() {
                 val body = response.body()
                 if (body != null && body.success) {
 
-                    val urls = body.data.flatMap { evento ->
+                    // ⛔️ ERROR AQUÍ ANTES: body.data YA NO ES LISTA → ES OBJETO
+                    val urls = body.data.events.flatMap { evento ->
                         evento.imagenes.mapNotNull { it.url_imagen }
                     }.map { normalizeUrl(it) }
 

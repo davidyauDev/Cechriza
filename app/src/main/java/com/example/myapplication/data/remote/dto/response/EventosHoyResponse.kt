@@ -2,19 +2,24 @@ package com.example.myapplication.data.remote.dto.response
 
 data class EventosHoyResponse(
     val success: Boolean,
-    val data: List<Evento>
+    val data: EventosHoyData,
+    val message: String
+)
+
+data class EventosHoyData(
+    val events: List<Evento>,
+    val date: String
 )
 
 data class Evento(
     val id: Int,
     val titulo: String,
     val descripcion: String,
-    val fecha_inicio: String,
-    val fecha_fin: String,
-    val estado: String,
+    val active: Int,
+    val fecha: String,
     val created_at: String,
     val updated_at: String,
-    val imagenes: List<EventoImagen> = emptyList()
+    val imagenes: List<EventoImagen>
 )
 
 data class EventoImagen(
@@ -27,4 +32,3 @@ data class EventoImagen(
     val created_at: String?,
     val updated_at: String?
 )
-

@@ -45,6 +45,8 @@
           <value>
             <set>
               <option value="6288828a-c7ed-4558-ba4f-a4e7a2821933" />
+              <option value="d739f537-d266-4382-896a-0ca9db64ac9a" />
+              <option value="2d0cea08-d402-42cd-9904-87defcda0519" />
             </set>
           </value>
         </entry>
@@ -270,6 +272,7 @@
       <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd">
         <set>
           <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/data/remote/dto/response/LoginResponse.kt" />
+          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/ui/camera/CameraScreen.kt" />
         </set>
       </entry>
       <entry key="0d3be764-df1d-4b7d-8706-34733d98d88f" />
