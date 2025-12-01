@@ -374,7 +374,7 @@ fun AttendanceCameraView(
                     Toast.makeText(context, "❌ No se pudo capturar la imagen", Toast.LENGTH_SHORT).show()
                 }
             },
-            enabled = !captureEnabled,
+            enabled = captureEnabled,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp),
