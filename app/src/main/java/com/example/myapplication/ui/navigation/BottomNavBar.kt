@@ -1,13 +1,12 @@
 package com.example.myapplication.ui.navigation
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.local.model.NavItem
@@ -19,46 +18,43 @@ fun BottomNavBar(
     onItemSelected: (Int) -> Unit
 ) {
     NavigationBar(
-        containerColor = Color(0xFFF8F8F8),
+        containerColor = Color.White,
         tonalElevation = 4.dp,
-        contentColor = Color.DarkGray
+        contentColor = Color.Gray
     ) {
         navItemList.forEachIndexed { index, navItem ->
             val isSelected = index == selectedIndex
-            val animatedScale by animateFloatAsState(
-                targetValue = if (isSelected) 1.15f else 1f,
-                label = "ScaleOnSelect"
-            )
 
             NavigationBarItem(
                 selected = isSelected,
                 onClick = { onItemSelected(index) },
                 icon = {
-                    Icon(
-                        imageVector = navItem.icon,
-                        contentDescription = navItem.label,
-                        tint = if (isSelected)
-                            Color(0xFF0051A8) // Azul corporativo
-                        else
-                            Color.Gray,
-                        modifier = Modifier.scale(animatedScale)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .background(
+                                color = if (isSelected) Color(0xFFDCEBFA) else Color.Transparent,
+                                shape = MaterialTheme.shapes.medium
+                            )
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = navItem.icon,
+                            contentDescription = navItem.label,
+                            tint = if (isSelected) Color(0xFF0051A8) else Color.Gray
+                        )
+                    }
                 },
                 label = {
                     Text(
                         text = navItem.label,
                         fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (isSelected)
-                            Color(0xFF0051A8)
-                        else
-                            Color.Gray
+                        color = if (isSelected) Color(0xFF0051A8) else Color.Gray
                     )
                 },
-                alwaysShowLabel = true,
-                interactionSource = remember { MutableInteractionSource() }
+                alwaysShowLabel = true
             )
         }
     }
 }
+

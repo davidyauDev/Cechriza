@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
@@ -58,16 +59,28 @@ fun LoginScreen(
         systemUiController.setStatusBarColor(color = background, darkIcons = true)
     }
 
-    LaunchedEffect(loginState) {
-        if (loginState is LoginState.Success) {
-            val state = loginState as LoginState.Success
-            userViewModel.setUserInMemory(state.user.name, state.token, state.user.id, state.user.email)
-            userViewModel.setEmpCodeInMemory(state.user.empCode)
-            SessionManager.setSession(state.user.id, state.token, state.user.name, state.user.email, state.user.empCode)
-            userViewModel.saveEmpCode(state.user.empCode)
-            onLoginSuccess()
-        }
+    if (loginState is LoginState.Success) {
+        val state = loginState as LoginState.Success
+
+        val context = LocalContext.current
+
+        userViewModel.setUserInMemory(state.user.name, state.token, state.user.id, state.user.email)
+        userViewModel.setEmpCodeInMemory(state.user.empCode)
+
+        SessionManager.setSession(
+            context = context,
+            userId = state.user.id,
+            token = state.token,
+            name = state.user.name,
+            email = state.user.email,
+            empCode = state.user.empCode
+        )
+
+        userViewModel.saveEmpCode(state.user.empCode)
+
+        onLoginSuccess()
     }
+
 
     Box(
         modifier = Modifier

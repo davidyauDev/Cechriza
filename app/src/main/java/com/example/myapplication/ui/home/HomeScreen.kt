@@ -124,18 +124,15 @@ fun HomeScreen(
     var showMockLocationDialog by remember { mutableStateOf(false) }
     var mockLocationAppName by remember { mutableStateOf<String?>(null) }
 
-    // NUEVOS: estados para mostrar un diálogo de error de ubicación asegurando visibilidad
     var showLocationErrorDialog by remember { mutableStateOf(false) }
     var locationErrorMessage by remember { mutableStateOf("") }
 
-    // Estados para el menú hamburguesa
     var selectedDrawerItem by remember { mutableStateOf("Home") }
 
     LaunchedEffect(Unit) {
         currentDate.value = SimpleDateFormat("EEEE dd, MMM yyyy", Locale("es")).format(Date())
     }
 
-    // Drawer state para el menú hamburguesa (navegación entre screens)
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerCoroutineScope = rememberCoroutineScope()
 
@@ -168,7 +165,6 @@ fun HomeScreen(
         }
     }
 
-    // 🚀 Lanzador de permisos múltiples
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -189,7 +185,6 @@ fun HomeScreen(
                     return@launch
                 }
 
-                // ✅ Usamos la versión mejorada
                 isLoadingLocation = true
                 val result = awaitLocationForAttendanceImproved(fusedLocationClient, context, locationDao, 8000L)
                 isLoadingLocation = false
@@ -363,7 +358,6 @@ fun HomeScreen(
             return
         }
 
-        // ⚠️ Si faltan permisos
         val toRequest = mutableListOf<String>()
         if (!hasCameraPermission(context)) toRequest.add(android.Manifest.permission.CAMERA)
         if (!hasLocationPermission(context)) {
@@ -395,7 +389,6 @@ fun HomeScreen(
         }
     }
 
-    // 🧱 UI principal
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -408,26 +401,36 @@ fun HomeScreen(
                     }) { Text("Inicio") }
                     HorizontalDivider()
 
-                    TextButton(onClick = {
-                        selectedDrawerItem = "Profile"
-                        drawerCoroutineScope.launch { drawerState.close(); snackbarHostState.showSnackbar("Ir a Perfil (simulado)") }
-                    }) { Text("Perfil") }
-                    HorizontalDivider()
+
 
                     TextButton(onClick = {
                         selectedDrawerItem = "Routes"
                         drawerCoroutineScope.launch {
                             drawerState.close()
-                            // Navegar a la pantalla de Rutas
                             navController.navigate("routes")
                         }
                     }) { Text("Rutas del día") }
                     HorizontalDivider()
 
+
+
+
                     TextButton(onClick = {
-                        selectedDrawerItem = "Settings"
-                        drawerCoroutineScope.launch { drawerState.close(); snackbarHostState.showSnackbar("Abrir Ajustes (simulado)") }
-                    }) { Text("Ajustes") }
+                        selectedDrawerItem = "Logout"
+                        drawerCoroutineScope.launch {
+                            drawerState.close()
+                            Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
+                            navController.navigate("login") {
+                                popUpTo("home") { inclusive = true }
+                            }
+                            userViewModel.clearUser()
+                        }
+                    }) { Text("Cerrar Sesión") }
+
+                    HorizontalDivider()
+
+
+
                 }
             }
         }
@@ -435,11 +438,15 @@ fun HomeScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         ) { paddingValues ->
-            Box(modifier = modifier.fillMaxSize().padding(paddingValues)) {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFF2F4F6)) // Gris claro de fondo
+                    .padding(paddingValues)
+            ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     BlueHeaderWithName(
                         userName = userName,
-                        currentDate = currentDate.value,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(70.dp)
@@ -468,23 +475,28 @@ fun HomeScreen(
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {
-                            BannerCarousel()
+                            BannerCard(
+                                imageUrl = "https://s1.significados.com/foto/navidad-isocial-cke.jpg?class=article" +
+                                        "",
+                                title = "Actualización de Beneficios",
+                                subtitle = "Nuevas opciones de seguro médico",
+                                description = "Revisa las nuevas coberturas y elige el plan que mejor se adapte a ti y tu familia.",
+                                label = "Importante",
+                                date = "31 Dic",
+                                onClose = { /* TODO: remove banner from list if needed */ },
+                                onInfoClick = { /* TODO: handle more info click */ }
+                            )
                             Spacer(modifier = Modifier.height(8.dp))
-                            LastMarkText(viewModel = attendanceViewModel)
                             Spacer(modifier = Modifier.height(12.dp))
                             EntryExitButtons(
                                 onEntry = { startAttendanceFlow(AttendanceType.ENTRADA) },
                                 onExit = { startAttendanceFlow(AttendanceType.SALIDA) },
-                                onLogout = {
-                                    Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
-                                    navController.navigate("login") { popUpTo("home") { inclusive = true } }
-                                    userViewModel.clearUser()
-                                },
-                                onViewRoutes = { navController.navigate("routes") },
+
                                 isBusy = (isCheckingPermissions || isLoadingLocation || isNavigatingToCamera),
                                 activeType = currentAttendanceType
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            LastMarkText(viewModel = attendanceViewModel)
+
                         }
                     }
                 }

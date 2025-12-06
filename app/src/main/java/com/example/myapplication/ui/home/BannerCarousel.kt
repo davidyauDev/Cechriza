@@ -24,213 +24,106 @@ import com.google.accompanist.pager.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.util.Log
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 private const val TAG = "BannerCarousel"
 
 @OptIn(ExperimentalPagerApi::class)
 @Composable
-fun BannerCarousel() {
-    val pagerState = rememberPagerState()
-
-    var images by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
-
-    fun normalizeUrl(url: String): String {
-        return url
-            .replace("http://localhost", "http://10.0.2.2")
-            .replace("http://127.0.0.1", "http://10.0.2.2")
-    }
-
-    LaunchedEffect(Unit) {
-
-        // Auto-slide
-        launch {
-            while (true) {
-                delay(4000)
-                if (images.isNotEmpty()) {
-                    val next = (pagerState.currentPage + 1) % images.size
-                    pagerState.animateScrollToPage(next)
-                }
-            }
-        }
-
-        try {
-            isLoading = true
-            errorMsg = null
-
-            val tokenProvider = { SessionManager.token }
-            val api = RetrofitClient.apiWithToken(tokenProvider)
-
-            val response = try {
-                api.getEventosHoy()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error llamando eventos/hoy: ${e.message}")
-                errorMsg = "Error de conexión al obtener eventos"
-                null
-            }
-
-            if (response != null && response.isSuccessful) {
-                val body = response.body()
-                if (body != null && body.success) {
-
-                    // ⛔️ ERROR AQUÍ ANTES: body.data YA NO ES LISTA → ES OBJETO
-                    val urls = body.data.events.flatMap { evento ->
-                        evento.imagenes.mapNotNull { it.url_imagen }
-                    }.map { normalizeUrl(it) }
-
-                    images = urls
-
-                    if (images.isEmpty()) {
-                        errorMsg = "No hay imágenes para mostrar"
-                    }
-
-                } else {
-                    errorMsg = "Respuesta inválida del servidor"
-                }
-            } else {
-                errorMsg = "Error al obtener eventos: ${response?.code() ?: "?"}"
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error general: ${e.message}")
-            errorMsg = e.localizedMessage ?: "Error inesperado"
-            images = emptyList()
-        } finally {
-            isLoading = false
-        }
-    }
-
-    Column(
+fun BannerCard(
+    imageUrl: String,
+    title: String,
+    subtitle: String,
+    description: String,
+    label: String,
+    labelColor: Color = Color(0xFFFFC107), // amarillo (como "Navidad")
+    date: String,
+    onClose: () -> Unit = {},
+    onInfoClick: () -> Unit = {}
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-
-        // LOADING
-        if (isLoading) {
-            Box(
+        Column {
+            // Imagen del banner
+            SubcomposeAsyncImage(
+                model = imageUrl,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        }
+                    .height(120.dp)
+            )
 
-        // SI NO HAY IMÁGENES
-        else if (images.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = errorMsg ?: "No hay banners disponibles", color = Color.Gray)
-            }
-        }
-
-        // SI HAY IMÁGENES
-        else {
-            HorizontalPager(
-                count = images.size,
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-            ) { page ->
-
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(6.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(4.dp)
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-
-                    val url = images.getOrNull(page)
-                    val token = SessionManager.token
-
-                    if (url != null) {
-                        val builder = ImageRequest.Builder(LocalContext.current)
-                            .data(url)
-
-                        if (!token.isNullOrEmpty()) {
-                            builder.addHeader("Authorization", "Bearer $token")
-                        }
-
-                        val model = builder.build()
-
-                        SubcomposeAsyncImage(
-                            model = model,
-                            contentDescription = "Banner $page",
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(260.dp),
-                            loading = {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            },
-                            error = {
-                                Log.w(TAG, "Coil failed to load $url")
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(text = "Error cargando imagen", color = Color.Red)
-                                }
-                            },
-                            success = {
-                                SubcomposeAsyncImageContent()
-                            }
-                        )
-
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(text = "No image", color = Color.Gray)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-
-                val pageCount = images.size
-
-                for (i in 0 until pageCount) {
-                    val isSelected = pagerState.currentPage == i
-
                     Box(
                         modifier = Modifier
-                            .size(if (isSelected) 10.dp else 8.dp)
-                            .padding(4.dp)
-                            .background(
-                                color = if (isSelected) Color.Red else Color.LightGray,
-                                shape = CircleShape
-                            )
+                            .background(labelColor, shape = RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            color = Color.White,
+                            fontSize = 10.sp
+                        )
+                    }
+
+                    Text(
+                        text = date,
+                        fontSize = 11.sp,
+                        color = Color.Gray
                     )
                 }
-            }
 
-            if (errorMsg != null) {
                 Spacer(modifier = Modifier.height(8.dp))
+
                 Text(
-                    text = errorMsg ?: "",
-                    color = Color.Red,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
                 )
+
+                Text(
+                    text = subtitle,
+                    fontSize = 13.sp,
+                    color = Color(0xFF0051A8), // azul oscuro
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = description,
+                    fontSize = 12.sp,
+                    color = Color.DarkGray
+                )
+                /*
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF0051A8), shape = RoundedCornerShape(6.dp))
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .align(Alignment.Start)
+                ) {
+                    Text(
+                        text = "Ver detalles",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }*/
             }
         }
     }

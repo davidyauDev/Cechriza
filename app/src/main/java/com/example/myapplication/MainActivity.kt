@@ -37,13 +37,14 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.work.*
+import com.example.myapplication.data.preferences.SessionManager
 import com.example.myapplication.work.SyncAttendancesWorker
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        SessionManager.init(this)
         // Programar WorkManager para sincronización periódica (cada 15 minutos mínimo)
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
