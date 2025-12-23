@@ -1,54 +1,24 @@
 package com.example.myapplication.ui.home
 
-import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.local.entity.AttendanceType
-import com.example.myapplication.data.repository.AttendanceRepository
-import kotlinx.coroutines.delay
+import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
+import com.example.myapplication.data.remote.network.EventosRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class HomeViewModel(
-    private val attendanceRepository: AttendanceRepository
+    private val eventosRepository: EventosRepository
 ) : ViewModel() {
 
-    private val _currentTime = MutableStateFlow("")
-    val currentTime: StateFlow<String> = _currentTime
+    private val _eventosHoy = MutableStateFlow<EventosHoyResponse?>(null)
+    val eventosHoy: StateFlow<EventosHoyResponse?> = _eventosHoy
 
-    private val _currentDate = MutableStateFlow("")
-    val currentDate: StateFlow<String> = _currentDate
-
-    private val _snackbar = MutableStateFlow<String?>(null)
-    val snackbar: StateFlow<String?> = _snackbar
-
-    fun updateClock() {
+    fun loadEventosHoy() {
         viewModelScope.launch {
-            while (true) {
-                _currentTime.value =
-                    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-                delay(1000)
-            }
+            val response = eventosRepository.getEventosHoy()
+            _eventosHoy.value = if (response.isSuccessful) response.body() else null
         }
     }
-
-    fun updateDate() {
-        _currentDate.value =
-            SimpleDateFormat("EEEE dd, MMM yyyy", Locale("es")).format(Date())
-    }
-
-    fun saveAttendance(latitude: Double, longitude: Double, type: AttendanceType, photo: Bitmap) {
-        viewModelScope.launch {
-            val result = attendanceRepository.saveAttendance(latitude, longitude, type, photo)
-            _snackbar.value = result.fold(
-                onSuccess = { "✔️ Registro enviado correctamente" },
-                onFailure = { "❌ Error al registrar: ${it.message}" }
-            )
-        }
-    }
-
 }

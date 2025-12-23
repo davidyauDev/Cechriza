@@ -279,7 +279,7 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                             FilledTonalButton(
                                 onClick = {
                                     r.ticketId?.let { id ->
-                                        val url = "http://161.132.75.22/system/formulario_ticket?id=$id"
+                                        val url = "https://osticket.cechriza.com/system/formulario_ticket?id=$id"
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                         context.startActivity(intent)
                                     }

@@ -48,7 +48,6 @@ fun AttendanceScreen(
     attendanceViewModel: AttendanceViewModel,
     modifier: Modifier = Modifier
 ) {
-    // Fecha inicial (hoy)
     val todayRange = remember {
         val cal = Calendar.getInstance()
         cal.time = Date()

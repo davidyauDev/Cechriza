@@ -17,6 +17,7 @@
       <option value="563592d0-18a4-4c40-856c-e4a394c397df" />
       <option value="5f226e9d-862d-4b41-808e-15d64737dcc0" />
       <option value="72a1a331-53e2-4178-956b-efb698bc5289" />
+      <option value="83e8d579-8b93-417e-a519-9ad7163f2664" />
       <option value="8cbc0884-3348-4a73-a1e4-6c734f78e6ad" />
       <option value="90e18693-69fb-4e04-a3f2-b12ae1cb9d94" />
       <option value="a9bbb488-bdf5-4f74-855b-95cf13872d4c" />
@@ -44,9 +45,9 @@
         <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd">
           <value>
             <set>
+              <option value="2d0cea08-d402-42cd-9904-87defcda0519" />
               <option value="6288828a-c7ed-4558-ba4f-a4e7a2821933" />
               <option value="d739f537-d266-4382-896a-0ca9db64ac9a" />
-              <option value="2d0cea08-d402-42cd-9904-87defcda0519" />
             </set>
           </value>
         </entry>
@@ -269,12 +270,7 @@
     </option>
     <pendingWorkingSetItems>
       <entry key="0c1f6d6d-6d66-488a-9695-c31f0d212c1a" />
-      <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd">
-        <set>
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/data/remote/dto/response/LoginResponse.kt" />
-          <option value="file://$PROJECT_DIR$/app/src/main/java/com/example/myapplication/ui/camera/CameraScreen.kt" />
-        </set>
-      </entry>
+      <entry key="0cf1bd08-7728-416e-a26b-228414e68bfd" />
       <entry key="0d3be764-df1d-4b7d-8706-34733d98d88f" />
       <entry key="0f631d98-a520-4147-a7f2-ca6098b4ad12" />
       <entry key="1bbeb840-1677-48b1-ad03-3b8fce94f91d" />

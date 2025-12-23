@@ -196,14 +196,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Text(
-                text = "¿Olvidó su contraseña?",
-                modifier = Modifier
-                    .clickable { /* TODO: Navegar a pantalla de recuperación */ }
-                    .padding(4.dp),
-                color = primaryBlue,
-                style = MaterialTheme.typography.bodyMedium.copy(textDecoration = TextDecoration.Underline)
-            )
+
 
             Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }

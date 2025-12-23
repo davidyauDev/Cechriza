@@ -40,6 +40,9 @@ import android.app.AppOpsManager
 import android.location.Location
 import android.util.Log
 import com.example.myapplication.data.local.database.LocationDatabase
+import com.example.myapplication.data.preferences.SessionManager
+import com.example.myapplication.data.remote.network.EventosRepository
+import com.example.myapplication.data.remote.network.RetrofitClient
 
 // --- Utilities moved to top so HomeScreen can reference them reliably ---
 @Suppress("unused")
@@ -105,6 +108,21 @@ fun HomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locationDao = remember { LocationDatabase.getDatabase(context).locationDao() }
+
+    val tokenProvider = { SessionManager.token }
+
+    val eventosRepository = remember {
+        EventosRepository(RetrofitClient.apiWithToken(tokenProvider))
+    }
+
+    val factory = remember { HomeViewModelFactory(eventosRepository) }
+    val homeViewModel: HomeViewModel = viewModel(factory = factory)
+
+    val eventosHoy by homeViewModel.eventosHoy.collectAsState()
+
+    LaunchedEffect(Unit) {
+        homeViewModel.loadEventosHoy()
+    }
 
     var isCheckingPermissions by remember { mutableStateOf(false) }
     var isNavigatingToCamera by remember { mutableStateOf(false) }
@@ -403,7 +421,7 @@ fun HomeScreen(
 
 
 
-                    TextButton(onClick = {
+                   TextButton(onClick = {
                         selectedDrawerItem = "Routes"
                         drawerCoroutineScope.launch {
                             drawerState.close()
@@ -475,17 +493,24 @@ fun HomeScreen(
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {
-                            BannerCard(
-                                imageUrl = "https://s1.significados.com/foto/navidad-isocial-cke.jpg?class=article" +
-                                        "",
-                                title = "Actualización de Beneficios",
-                                subtitle = "Nuevas opciones de seguro médico",
-                                description = "Revisa las nuevas coberturas y elige el plan que mejor se adapte a ti y tu familia.",
-                                label = "Importante",
-                                date = "31 Dic",
-                                onClose = { /* TODO: remove banner from list if needed */ },
-                                onInfoClick = { /* TODO: handle more info click */ }
-                            )
+                            val eventosConImagenes = remember(eventosHoy) {
+                                eventosHoy?.data?.events
+                                    ?.flatMap { evento ->
+                                        evento.imagenes.map { imagen ->
+                                            EventoConImagen(
+                                                imagen = imagen,
+                                                eventoTitulo = evento.titulo,
+                                                eventoDescripcion = evento.descripcion,
+                                                eventoFecha = evento.fecha
+                                            )
+                                        }
+                                    } ?: emptyList()
+                            }
+                            if (eventosConImagenes.isNotEmpty()) {
+                                EventosCarouselBanner(eventos = eventosConImagenes)
+                            }
+
+
                             Spacer(modifier = Modifier.height(8.dp))
                             Spacer(modifier = Modifier.height(12.dp))
                             EntryExitButtons(

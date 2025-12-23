@@ -10,6 +10,6 @@ object NavItemList {
     val navItemList = listOf(
         NavItem("Inicio", Icons.Default.Home),
         NavItem("Asistencias", Icons.Default.Person),
-        NavItem("Rutas", Icons.Default.Place)
+        /*NavItem("Rutas", Icons.Default.Place)*/
     )
 }

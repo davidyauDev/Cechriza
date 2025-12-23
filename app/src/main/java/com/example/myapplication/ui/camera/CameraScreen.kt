@@ -58,7 +58,6 @@ import com.example.myapplication.ui.home.awaitLocationForAttendanceImproved
 import com.example.myapplication.ui.home.LocationResult
 import com.example.myapplication.data.local.database.LocationDatabase
 
-// ML Kit imports
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
@@ -94,7 +93,6 @@ fun CameraScreen(
                 try {
                     // Obtener ubicación usando la versión mejorada que devuelve LocationResult
                     var loc: android.location.Location? = null
-
                     var result = awaitLocationForAttendanceImproved(fusedLocationClient, context, locationDao, 10000L)
                     if (result is LocationResult.Success) {
                         loc = result.location
