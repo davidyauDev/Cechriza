@@ -41,6 +41,7 @@ import android.location.Location
 import android.util.Log
 import com.example.myapplication.data.local.database.LocationDatabase
 import com.example.myapplication.data.preferences.SessionManager
+import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
 import com.example.myapplication.data.remote.network.EventosRepository
 import com.example.myapplication.data.remote.network.RetrofitClient
 
@@ -263,7 +264,7 @@ fun HomeScreen(
             return@rememberLauncherForActivityResult
         }
 
-        // ❌ Permisos no concedidos
+        //  Permisos no concedidos
         val missing = mutableListOf<String>()
         if (!cameraGranted) missing.add("Cámara")
         if (!locationGranted) missing.add("Ubicación")
@@ -298,7 +299,7 @@ fun HomeScreen(
         isCheckingPermissions = false
     }
 
-    // 🧭 Flujo principal de asistencia
+    //  Flujo principal de asistencia
     fun startAttendanceFlow(type: AttendanceType) {
         if (isCheckingPermissions || isNavigatingToCamera) return
         isCheckingPermissions = true
@@ -493,37 +494,75 @@ fun HomeScreen(
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {
-                            val eventosConImagenes = remember(eventosHoy) {
-                                eventosHoy?.data?.events
-                                    ?.flatMap { evento ->
-                                        evento.imagenes.map { imagen ->
-                                            EventoConImagen(
-                                                imagen = imagen,
-                                                eventoTitulo = evento.titulo,
-                                                eventoDescripcion = evento.descripcion,
-                                                eventoFecha = evento.fecha
-                                            )
-                                        }
-                                    } ?: emptyList()
-                            }
-                            if (eventosConImagenes.isNotEmpty()) {
-                                EventosCarouselBanner(eventos = eventosConImagenes)
-                            }
 
+                            when (eventosHoy) {
+
+                                is UiState.Loading -> {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator()
+                                    }
+                                }
+
+
+                                is UiState.Error -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text("Sin conexión a internet")
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Button(onClick = { homeViewModel.loadEventosHoy() }) {
+                                            Text("Reintentar")
+                                        }
+                                    }
+                                }
+
+                                is UiState.Success -> {
+
+                                    val eventos =
+                                        (eventosHoy as UiState.Success<EventosHoyResponse>)
+                                            .data
+                                            .data
+                                            .events
+
+                                    val eventosConImagenes = remember(eventos) {
+                                        eventos.flatMap { evento ->
+                                            evento.imagenes.map { imagen ->
+                                                EventoConImagen(
+                                                    imagen = imagen,
+                                                    eventoTitulo = evento.titulo,
+                                                    eventoDescripcion = evento.descripcion,
+                                                    eventoFecha = evento.fecha
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (eventosConImagenes.isNotEmpty()) {
+                                        EventosCarouselBanner(eventos = eventosConImagenes)
+                                    }
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Spacer(modifier = Modifier.height(12.dp))
+
                             EntryExitButtons(
                                 onEntry = { startAttendanceFlow(AttendanceType.ENTRADA) },
                                 onExit = { startAttendanceFlow(AttendanceType.SALIDA) },
-
                                 isBusy = (isCheckingPermissions || isLoadingLocation || isNavigatingToCamera),
                                 activeType = currentAttendanceType
                             )
-                            LastMarkText(viewModel = attendanceViewModel)
 
+                            LastMarkText(viewModel = attendanceViewModel)
                         }
                     }
+
                 }
 
                 if (isLoadingLocation) {

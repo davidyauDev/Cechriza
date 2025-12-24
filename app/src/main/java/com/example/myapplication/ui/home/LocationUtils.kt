@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Priority
@@ -14,7 +16,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
-// ---------- Result models ----------
 
 sealed class LocationResult {
     data class Success(val location: Location) : LocationResult()
@@ -66,10 +67,20 @@ suspend fun awaitLocationForAttendanceImproved(
             return LocationResult.Error(LocationError.GPS_DISABLED)
         }
 
-        //  Ubicación en vivo (HIGH accuracy)
-        val startTime = System.currentTimeMillis()
+        val hasNetwork = isNetworkAvailable(context)
 
-        val freshLocation = withTimeoutOrNull(timeoutMs) {
+        val effectiveTimeout =
+            if (hasNetwork) timeoutMs else timeoutMs * 2
+
+        val effectiveMinAccuracy =
+            if (hasNetwork) minAccuracyMeters else 400f
+
+
+
+
+
+
+        val freshLocation = withTimeoutOrNull(effectiveTimeout) {
             suspendCancellableCoroutine<Location?> { cont ->
                 val cts = CancellationTokenSource()
                 client.getCurrentLocation(
@@ -90,9 +101,14 @@ suspend fun awaitLocationForAttendanceImproved(
 
             val isAccurate =
                 freshLocation.hasAccuracy() &&
-                        freshLocation.accuracy <= minAccuracyMeters
-
+                        freshLocation.accuracy <= effectiveMinAccuracy
+            //Aceptar estrictamente si hay red
             if (isAccurate && isFresh) {
+                saveToRoom(dao, freshLocation)
+                return LocationResult.Success(freshLocation)
+            }
+            //SIN INTERNET → aceptar aunque sea imprecisa
+            if (!hasNetwork && isFresh) {
                 saveToRoom(dao, freshLocation)
                 return LocationResult.Success(freshLocation)
             }
@@ -129,21 +145,13 @@ suspend fun awaitLocationForAttendanceImproved(
         }
 
         if (stored != null) {
-            val ageMs = System.currentTimeMillis() - stored.timestamp
-            val isRecent = ageMs <= maxAgeMs
-            val isAccurate = stored.accuracy <= minAccuracyMeters
-
-            if (isRecent && isAccurate) {
-                val loc = Location("room").apply {
-                    latitude = stored.latitude
-                    longitude = stored.longitude
-                    accuracy = stored.accuracy
-                    time = stored.timestamp
-                }
-                return LocationResult.Success(loc)
-            } else {
-                return LocationResult.Error(LocationError.INACCURATE)
+            val loc = Location("room").apply {
+                latitude = stored.latitude
+                longitude = stored.longitude
+                accuracy = stored.accuracy
+                time = stored.timestamp
             }
+            return LocationResult.Success(loc)
         }
 
         return LocationResult.Error(LocationError.NO_LOCATION_AVAILABLE)
@@ -173,4 +181,12 @@ private suspend fun saveToRoom(
     } catch (_: Exception) {
         // opcional: log
     }
+}
+
+private fun isNetworkAvailable(context: Context): Boolean {
+    val cm =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = cm.activeNetwork ?: return false
+    val caps = cm.getNetworkCapabilities(network) ?: return false
+    return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }
