@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.myapplication.ui.home.awaitLocationForAttendanceImproved
 import com.example.myapplication.ui.home.LocationResult
+import com.example.myapplication.ui.home.AppHeader
 import com.example.myapplication.data.local.database.LocationDatabase
 
 import com.google.mlkit.vision.common.InputImage
@@ -141,6 +142,9 @@ fun CameraScreen(
         onClose = {
             navController.popBackStack()
         },
+        onNotificationsClick = {
+            navController.navigate("notifications")
+        },
         isLoading = isLoading
     )
 }
@@ -151,6 +155,7 @@ fun CameraScreen(
 fun AttendanceCameraView(
     onCaptureImage: (Bitmap) -> Unit,
     onClose: () -> Unit,
+    onNotificationsClick: () -> Unit,
     isLoading: Boolean = false
 ) {
     val context = LocalContext.current
@@ -280,6 +285,18 @@ fun AttendanceCameraView(
                 )
             }, executor)
         }
+
+        AppHeader(
+            title = "Camara",
+            subtitle = "Captura de asistencia",
+            showBackButton = true,
+            onBackClick = { onClose() },
+            showNotificationButton = true,
+            onNotificationClick = onNotificationsClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .zIndex(10f)
+        )
 
         // Indicador de estado de detección en tiempo real
         Box(

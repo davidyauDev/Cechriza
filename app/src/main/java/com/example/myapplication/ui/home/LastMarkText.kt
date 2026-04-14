@@ -1,9 +1,25 @@
 package com.example.myapplication.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
@@ -15,43 +31,51 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.Attendance.AttendanceViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun LastMarkText(viewModel: AttendanceViewModel) {
     val lastAttendanceState = viewModel.getLastAttendance().observeAsState()
     val lastAttendance = lastAttendanceState.value
 
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 8.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-
         Text(
-            text = "Última marca",
+            text = "Ultima marca",
             style = MaterialTheme.typography.titleMedium.copy(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             ),
-            color = Color(0xFF333333),
-            modifier = Modifier.padding(bottom = 4.dp)
+            color = BrandText
         )
 
-        Card(
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF4F7FB)),
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, BrandBorder),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             if (lastAttendance != null) {
                 val date = Date(lastAttendance.timestamp)
                 val formattedTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
                 val formattedDate = SimpleDateFormat("dd MMM", Locale.getDefault()).format(date)
-                val type = lastAttendance.type.name
+                val type = lastAttendance.type.name.uppercase()
 
-                val (color, icon, label) = when (type.uppercase()) {
-                    "ENTRADA" -> Triple(Color(0xFF2E7D32), "↑", "ENTRADA")
-                    "SALIDA" -> Triple(Color(0xFFC62828), "↓", "SALIDA")
-                    else -> Triple(Color.Gray, "●", type.uppercase())
+                val (accent, label, icon) = when (type) {
+                    "ENTRADA" -> Triple(BrandBlue, "Entrada", Icons.Default.KeyboardArrowUp)
+                    "SALIDA" -> Triple(BrandOrange, "Salida", Icons.Default.KeyboardArrowDown)
+                    else -> Triple(
+                        BrandMuted,
+                        type.lowercase().replaceFirstChar { it.uppercase() },
+                        Icons.Default.KeyboardArrowDown
+                    )
                 }
 
                 Row(
@@ -62,15 +86,14 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .background(color.copy(alpha = 0.15f), shape = CircleShape),
+                            .size(46.dp)
+                            .background(accent.copy(alpha = 0.12f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = icon,
-                            color = color,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = accent
                         )
                     }
 
@@ -81,33 +104,47 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                             text = label,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp,
-                            color = color
+                            color = accent
                         )
                         Text(
                             text = formattedDate,
-                            style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandMuted
                         )
                     }
 
-                    Text(
-                        text = formattedTime,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = Color.Black
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = formattedTime,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = BrandText
+                        )
+                        Text(
+                            text = "Ultima hora",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandMuted,
+                            textAlign = TextAlign.End
+                        )
+                    }
                 }
             } else {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    contentAlignment = Alignment.Center
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "No se ha registrado ninguna asistencia.",
+                        text = "Sin marcaciones todavia",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
+                        color = BrandText,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Tu ultima asistencia aparecera aqui cuando registres entrada o salida.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandMuted
                     )
                 }
             }

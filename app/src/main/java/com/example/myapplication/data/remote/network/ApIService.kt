@@ -12,6 +12,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -50,4 +51,24 @@ interface ApiService {
     // Nuevo endpoint: eventos hoy
     @GET("eventos/hoy")
     suspend fun getEventosHoy(): Response<EventosHoyResponse>
+
+    @GET("inventario/productos")
+    suspend fun getInventarioProductos(
+        @Query("tipo_responsable") tipoResponsable: String
+    ): Response<JsonElement>
+
+    @GET("solicitudes")
+    suspend fun getSolicitudes(
+        @Query("id_usuario_solicitante") userId: Int
+    ): Response<JsonElement>
+
+    @GET("solicitudes/{id}")
+    suspend fun getSolicitudById(
+        @Path("id") solicitudId: Int
+    ): Response<JsonElement>
+
+    @POST("solicitudes/registrar-completa")
+    suspend fun registrarSolicitudCompleta(
+        @Body multipartBody: MultipartBody
+    ): Response<JsonElement>
 }

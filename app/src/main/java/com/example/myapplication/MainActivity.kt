@@ -27,10 +27,12 @@ import com.example.myapplication.ui.navigation.NavItemList
 import com.example.myapplication.ui.Attendance.AttendanceScreen
 import com.example.myapplication.ui.Attendance.AttendanceViewModel
 import com.example.myapplication.ui.Attendance.AttendanceViewModelFactory
+import com.example.myapplication.ui.account.AccountScreen
 import com.example.myapplication.ui.camera.CameraScreen
 import com.example.myapplication.ui.home.HomeScreen
 import com.example.myapplication.ui.home.RoutesScreen
 import com.example.myapplication.ui.login.LoginScreen
+import com.example.myapplication.ui.notifications.NotificationsScreen
 import com.example.myapplication.ui.requests.RequestsScreen
 import kotlinx.coroutines.delay
 import androidx.compose.material3.Text
@@ -132,6 +134,27 @@ fun AppNavigation(navController: NavHostController) {
             RoutesScreen(navController = navController)
         }
 
+        composable("notifications") {
+            NotificationsScreen(
+                navController = navController,
+                showBackButton = true,
+                onAddRequestClick = { navController.navigate("requests_form") }
+            )
+        }
+
+        composable("requests_form") {
+            RequestsScreen(
+                onHomeClick = { navController.popBackStack() },
+                onNotificationsClick = { navController.navigate("notifications") },
+                onRegisterSuccess = {
+                    navController.navigate("notifications") {
+                        popUpTo("requests_form") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
         composable("camera/{attendanceType}") { backStackEntry ->
             val typeString = backStackEntry.arguments?.getString("attendanceType")
             val type = if (typeString == "ENTRADA") AttendanceType.ENTRADA else AttendanceType.SALIDA
@@ -168,7 +191,14 @@ fun BottomNavScreen(navController: NavHostController, attendanceViewModel: Atten
             selectedIndex = selectedIndex,
             navController = navController,
             modifier = Modifier.padding(paddingValues),
-            attendanceViewModel = attendanceViewModel
+            attendanceViewModel = attendanceViewModel,
+            onNavigateHome = { selectedIndex = 0 },
+            onNavigateNotifications = { navController.navigate("notifications") },
+            onLogout = {
+                navController.navigate("login") {
+                    popUpTo("main") { inclusive = true }
+                }
+            }
         )
     }
 }
@@ -178,11 +208,29 @@ fun ContentScreen(
     selectedIndex: Int,
     navController: NavHostController,
     attendanceViewModel: AttendanceViewModel,
+    onNavigateHome: () -> Unit,
+    onNavigateNotifications: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (selectedIndex) {
         0 -> HomeScreen(navController, attendanceViewModel = attendanceViewModel, modifier = modifier)
-        1 -> AttendanceScreen(attendanceViewModel = attendanceViewModel, modifier = modifier)
-        2 -> RequestsScreen(modifier = modifier)
+        1 -> AttendanceScreen(
+            attendanceViewModel = attendanceViewModel,
+            modifier = modifier,
+            onHomeClick = onNavigateHome,
+            onNotificationsClick = onNavigateNotifications
+        )
+        2 -> NotificationsScreen(
+            navController = navController,
+            modifier = modifier,
+            showBackButton = false,
+            onAddRequestClick = { navController.navigate("requests_form") }
+        )
+        3 -> AccountScreen(
+            modifier = modifier,
+            onNotificationsClick = onNavigateNotifications,
+            onLogoutClick = onLogout
+        )
     }
 }

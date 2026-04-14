@@ -1,194 +1,1487 @@
 package com.example.myapplication.ui.requests
 
+import android.graphics.Bitmap
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Icon
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.myapplication.ui.home.BrandBlue
+import com.example.myapplication.ui.home.BrandBlueDark
+import com.example.myapplication.ui.home.BrandBlueSoft
+import com.example.myapplication.ui.home.BrandBorder
+import com.example.myapplication.ui.home.BrandOrange
+import com.example.myapplication.ui.home.BrandSurface
+import com.example.myapplication.ui.home.BrandText
+import com.example.myapplication.ui.home.BrandMuted
+import com.example.myapplication.ui.home.AppHeader
+import com.example.myapplication.data.preferences.SessionManager
+import com.example.myapplication.data.remote.network.RetrofitClient
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayOutputStream
+import java.time.LocalDate
+import java.util.UUID
 
-// Simple data model for previewing the UI
-private data class Solicitud(
-    val id: String,
-    val user: String,
-    val date: String,
-    val type: String,
-    val status: RequestStatus
+private const val MAX_DROPDOWN_OPTIONS = 80
+private const val SOLICITUD_LOG_TAG = "SolicitudCompleta"
+private const val HARDCODED_SOLICITANTE_USER_ID = 14
+private const val DEFAULT_JUSTIFICACION = "Pedido interno"
+private const val DEFAULT_ID_DIRECCION_ENTREGA = "5"
+
+private val ScreenBackground = BrandSurface
+private val HeaderBackground = BrandBlueSoft
+private val HeaderBorder = BrandBorder
+private val CardBorder = BrandBorder
+private val TitleColor = BrandText
+private val BodyColor = BrandMuted
+private val AccentColor = BrandBlue
+private val AccentSoft = BrandBlueSoft
+private val DangerColor = Color(0xFFB42318)
+private val DangerSoft = Color(0xFFFEE4E2)
+private val SectionOptionsHeader = Color(0xFFF4F1FF)
+
+private enum class RequestTab(
+    val label: String,
+    val accent: Color,
+    val areaId: Int,
+    val inventoryResponsable: String,
+    val submitCategoryKey: String
+) {
+    Materials("Insumos", BrandBlue, 7, "LOGISTICA", "insumos"),
+    Tools("Herram.", BrandOrange, 12, "SSGG", "ssgg"),
+    Epp("EPP", BrandBlueDark, 11, "SSOMA", "rrhh")
+}
+
+private data class InventoryOption(
+    val inventoryId: Int? = null,
+    val areaId: Int? = null,
+    val label: String,
+    val requiresPreviousProductPhoto: Boolean = false
 )
 
-private enum class RequestStatus { PENDING, APPROVED, REJECTED }
+private fun defaultOptions(vararg labels: String): List<InventoryOption> {
+    return labels.map { InventoryOption(label = it, requiresPreviousProductPhoto = false) }
+}
 
-@OptIn(ExperimentalMaterial3Api::class)
+private data class RequestSectionTemplate(
+    val tab: RequestTab,
+    val title: String,
+    val options: List<InventoryOption>
+)
+
+@Stable
+private class RequestSectionState(template: RequestSectionTemplate) {
+    val tab: RequestTab = template.tab
+    val title: String = template.title
+    val options: List<InventoryOption> = template.options
+    val items = mutableStateListOf<MaterialItemForm>()
+}
+
+@Stable
+private data class MaterialItemForm(
+    val id: String = UUID.randomUUID().toString(),
+    val quantity: String = "",
+    val selectedInventoryId: Int? = null,
+    val selectedAreaId: Int? = null,
+    val description: String = "",
+    val requiresPreviousProductPhoto: Boolean = false,
+    val observations: String = "",
+    val photoUri: String? = null,
+    val photoBitmap: Bitmap? = null
+)
+
+private data class SubmitRequestResult(
+    val success: Boolean,
+    val message: String
+)
+
+private data class SolicitudBaseFields(
+    val justificacion: String,
+    val fechaNecesaria: String,
+    val idDireccionEntrega: String
+)
+
+private fun defaultSolicitudBaseFields(): SolicitudBaseFields {
+    return SolicitudBaseFields(
+        justificacion = DEFAULT_JUSTIFICACION,
+        fechaNecesaria = LocalDate.now().plusDays(7).toString(),
+        idDireccionEntrega = DEFAULT_ID_DIRECCION_ENTREGA
+    )
+}
+
 @Composable
-fun RequestsScreen(modifier: Modifier = Modifier) {
-    // Sample list (in a real app this will come from ViewModel / repository)
-    var query by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("Todas") }
-
-    val samples = remember {
-        listOf(
-            Solicitud("1", "María López", "Hoy 08:15", "Entrada", RequestStatus.PENDING),
-            Solicitud("2", "Carlos Pérez", "Ayer 17:42", "Salida", RequestStatus.APPROVED),
-            Solicitud("3", "Ana Gómez", "Hoy 09:03", "Entrada", RequestStatus.REJECTED),
-            Solicitud("4", "Luis Martinez", "Hoy 07:58", "Entrada", RequestStatus.PENDING)
+fun RequestsScreen(
+    modifier: Modifier = Modifier,
+    onHomeClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
+    onRegisterSuccess: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val materialsSection = remember {
+        RequestSectionState(
+            RequestSectionTemplate(
+                tab = RequestTab.Materials,
+                title = "Insumos / Materiales",
+                options = defaultOptions(
+                    "Cemento",
+                    "Arena",
+                    "Tornilleria",
+                    "Cable",
+                    "Pintura",
+                    "Otros"
+                )
+            )
+        )
+    }
+    val toolsSection = remember {
+        RequestSectionState(
+            RequestSectionTemplate(
+                tab = RequestTab.Tools,
+                title = "Calibradores / Herramientas",
+                options = defaultOptions(
+                    "Flexometro",
+                    "Nivel",
+                    "Taladro",
+                    "Llave",
+                    "Destornillador",
+                    "Otros"
+                )
+            )
+        )
+    }
+    val eppSection = remember {
+        RequestSectionState(
+            RequestSectionTemplate(
+                tab = RequestTab.Epp,
+                title = "EPP",
+                options = defaultOptions(
+                    "Guante de Seguridad",
+                    "Botas de seguridad TALLA 39",
+                    "Botas de seguridad TALLA 40",
+                    "BLOQUEADOR SOLAR",
+                    "Mascarilla KN95",
+                    "Casco de Seguridad"
+                )
+            )
         )
     }
 
-    val filtered = remember(query, selectedFilter) {
-        samples.filter { s ->
-            val matchesQuery = query.isBlank() || (s.user + " " + s.type).contains(query, ignoreCase = true)
-            val matchesFilter = when (selectedFilter) {
-                "Pendientes" -> s.status == RequestStatus.PENDING
-                "Aprobadas" -> s.status == RequestStatus.APPROVED
-                "Rechazadas" -> s.status == RequestStatus.REJECTED
-                else -> true
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var submitAttempted by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var expandedItemId by remember { mutableStateOf<String?>(null) }
+    var selectedTab by remember { mutableStateOf(RequestTab.Materials) }
+    val optionsByArea = remember { mutableStateMapOf<Int, List<InventoryOption>>() }
+    val optionsErrorByArea = remember { mutableStateMapOf<Int, String>() }
+    var loadingAreaId by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(selectedTab) {
+        val targetAreaId = selectedTab.areaId
+        val targetResponsable = selectedTab.inventoryResponsable
+        if (optionsByArea.containsKey(targetAreaId)) return@LaunchedEffect
+
+        loadingAreaId = targetAreaId
+        optionsErrorByArea.remove(targetAreaId)
+
+        try {
+            val tokenProvider = { SessionManager.token }
+            val api = RetrofitClient.apiWithToken(tokenProvider)
+            val response = withContext(Dispatchers.IO) {
+                api.getInventarioProductos(targetResponsable)
             }
-            matchesQuery && matchesFilter
+
+            if (response.isSuccessful) {
+                val remoteOptions = withContext(Dispatchers.Default) {
+                    extractInventoryOptionsForArea(response.body(), targetAreaId)
+                }
+                if (remoteOptions.isNotEmpty()) {
+                    optionsByArea[targetAreaId] = remoteOptions
+                } else {
+                    optionsErrorByArea[targetAreaId] =
+                        "Sin items remotos con ID para $targetResponsable. No se podra enviar hasta recargar."
+                }
+            } else {
+                optionsErrorByArea[targetAreaId] =
+                    "No se pudo cargar inventario de $targetResponsable (${response.code()}). No se podra enviar hasta recargar."
+            }
+        } catch (_: Exception) {
+            optionsErrorByArea[targetAreaId] =
+                "Sin conexion al inventario de $targetResponsable. No se podra enviar hasta recargar."
+        } finally {
+            if (loadingAreaId == targetAreaId) {
+                loadingAreaId = null
+            }
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        // Header
+    val totalItems = materialsSection.items.size + toolsSection.items.size + eppSection.items.size
+    val activeSections = when (selectedTab) {
+        RequestTab.Materials -> listOf(materialsSection)
+        RequestTab.Tools -> listOf(toolsSection)
+        RequestTab.Epp -> listOf(eppSection)
+    }
+    val allItems = listOf(materialsSection, toolsSection, eppSection).flatMap { it.items }
+    val canSubmit = totalItems > 0 && allItems.all {
+        it.quantity.toIntOrNull()?.let { value -> value > 0 } == true &&
+            it.selectedInventoryId != null &&
+            it.description.isNotBlank() &&
+            (!it.requiresPreviousProductPhoto || it.hasAttachedPhoto())
+    }
+    val currentAreaError = optionsErrorByArea[selectedTab.areaId]
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = ScreenBackground,
+        topBar = {
+            AppHeader(
+                title = "Solicitudes",
+                showBackButton = true,
+                showNotificationButton = true,
+                onBackClick = onHomeClick,
+                onNotificationClick = onNotificationsClick,
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SegmentedTab(
+                                label = RequestTab.Materials.label,
+                                accent = RequestTab.Materials.accent,
+                                selected = selectedTab == RequestTab.Materials,
+                                onClick = { selectedTab = RequestTab.Materials },
+                                modifier = Modifier.weight(1f)
+                            )
+                            SegmentedTab(
+                                label = RequestTab.Tools.label,
+                                accent = RequestTab.Tools.accent,
+                                selected = selectedTab == RequestTab.Tools,
+                                onClick = { selectedTab = RequestTab.Tools },
+                                modifier = Modifier.weight(1f)
+                            )
+                            SegmentedTab(
+                                label = RequestTab.Epp.label,
+                                accent = RequestTab.Epp.accent,
+                                selected = selectedTab == RequestTab.Epp,
+                                onClick = { selectedTab = RequestTab.Epp },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                if (loadingAreaId == selectedTab.areaId) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .width(18.dp)
+                                    .height(18.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentColor
+                            )
+                            Text(
+                                text = "Cargando items desde inventario...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                        }
+                    }
+                }
+
+                if (!currentAreaError.isNullOrBlank()) {
+                    item {
+                        Text(
+                            text = currentAreaError.orEmpty(),
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandMuted
+                        )
+                    }
+                }
+
+                activeSections.forEach { section ->
+                    item {
+                        val sectionOptions = optionsByArea[section.tab.areaId].orEmpty().ifEmpty { section.options }
+                        RequestForm(
+                            section = section,
+                            options = sectionOptions,
+                            submitAttempted = submitAttempted,
+                            expandedItemId = expandedItemId,
+                            onExpandedItemIdChange = { expandedItemId = it },
+                            onAddItem = { section.items.add(MaterialItemForm()) },
+                            onDeleteItem = { index ->
+                                if (index in section.items.indices) {
+                                    val removedId = section.items[index].id
+                                    section.items.removeAt(index)
+                                    if (expandedItemId == removedId) {
+                                        expandedItemId = null
+                                    }
+                                }
+                            },
+                            onQuantityChange = { index, value ->
+                                if (index in section.items.indices) {
+                                    section.items[index] = section.items[index].copy(quantity = value)
+                                }
+                            },
+                            onDescriptionChange = { index, value ->
+                                if (index in section.items.indices) {
+                                    section.items[index] = section.items[index].copy(
+                                        selectedInventoryId = value.inventoryId,
+                                        selectedAreaId = value.areaId,
+                                        description = value.label,
+                                        requiresPreviousProductPhoto = value.requiresPreviousProductPhoto
+                                    )
+                                }
+                            },
+                            onObservationsChange = { index, value ->
+                                if (index in section.items.indices) {
+                                    section.items[index] = section.items[index].copy(observations = value)
+                                }
+                            },
+                            onPhotoChange = { index, uri, bitmap ->
+                                if (index in section.items.indices) {
+                                    section.items[index] = section.items[index].copy(
+                                        photoUri = uri,
+                                        photoBitmap = bitmap
+                                    )
+                                }
+                            },
+                            onSubmit = {
+                                submitAttempted = true
+                                scope.launch {
+                                    if (!canSubmit) {
+                                        snackbarHostState.showSnackbar("Completa los campos requeridos")
+                                        return@launch
+                                    }
+
+                                    if (isSubmitting) return@launch
+                                    isSubmitting = true
+                                    val tokenProvider = { SessionManager.token }
+                                    val api = RetrofitClient.apiWithToken(tokenProvider)
+                                    val result = withContext(Dispatchers.IO) {
+                                        submitCompleteRequest(
+                                            api = api,
+                                            sections = listOf(materialsSection, toolsSection, eppSection),
+                                            baseFields = defaultSolicitudBaseFields(),
+                                            context = context
+                                        )
+                                    }
+                                    isSubmitting = false
+                                    if (result.success) {
+                                        materialsSection.items.clear()
+                                        toolsSection.items.clear()
+                                        eppSection.items.clear()
+                                        expandedItemId = null
+                                        submitAttempted = false
+                                        onRegisterSuccess()
+                                    } else {
+                                        snackbarHostState.showSnackbar(result.message)
+                                    }
+                                }
+                            },
+                            enabledSubmit = totalItems > 0 && !isSubmitting,
+                            isSubmitting = isSubmitting
+                        )
+                    }
+                }
+            }
+
+            if (isSubmitting) {
+                RegistrationLoadingOverlay()
+            }
+        }
+    }
+}
+
+@Composable
+private fun SegmentedTab(
+    label: String,
+    accent: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.12f) else Color.White,
+        label = "tabBackground"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.26f) else BrandBorder,
+        label = "tabBorder"
+    )
+    val titleColor by animateColorAsState(
+        targetValue = if (selected) accent else BrandText,
+        label = "tabTitle"
+    )
+
+    Surface(
+        modifier = modifier
+            .heightIn(min = 42.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(999.dp),
+        color = backgroundColor,
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelLarge,
+                color = titleColor,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun RegistrationLoadingOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, HeaderBorder),
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CircularProgressIndicator(
+                    color = AccentColor,
+                    strokeWidth = 3.dp
+                )
+                Text(
+                    text = "Registrando solicitud...",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TitleColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Espera un momento, estamos enviando los datos.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BodyColor,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RequestForm(
+    section: RequestSectionState,
+    options: List<InventoryOption>,
+    submitAttempted: Boolean,
+    expandedItemId: String?,
+    onExpandedItemIdChange: (String?) -> Unit,
+    onAddItem: () -> Unit,
+    onDeleteItem: (Int) -> Unit,
+    onQuantityChange: (Int, String) -> Unit,
+    onDescriptionChange: (Int, InventoryOption) -> Unit,
+    onObservationsChange: (Int, String) -> Unit,
+    onPhotoChange: (Int, String?, Bitmap?) -> Unit,
+    onSubmit: () -> Unit,
+    enabledSubmit: Boolean,
+    isSubmitting: Boolean
+) {
+    var pendingPhotoIndex by remember { mutableStateOf<Int?>(null) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        val index = pendingPhotoIndex ?: return@rememberLauncherForActivityResult
+        onPhotoChange(index, uri?.toString(), null)
+        pendingPhotoIndex = null
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        val index = pendingPhotoIndex ?: return@rememberLauncherForActivityResult
+        onPhotoChange(index, null, bitmap)
+        pendingPhotoIndex = null
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (section.items.isEmpty()) {
+            Column(
+                modifier = Modifier.padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                FilledTonalButton(
+                    onClick = onAddItem,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = AccentSoft,
+                        contentColor = AccentColor
+                    )
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Agregar")
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                section.items.forEachIndexed { index, item ->
+                    MaterialItemCard(
+                        itemNumber = index + 1,
+                        item = item,
+                        options = options,
+                        expanded = expandedItemId == item.id,
+                        onExpandedChange = { isExpanded ->
+                            onExpandedItemIdChange(if (isExpanded) item.id else null)
+                        },
+                        onDelete = { onDeleteItem(index) },
+                        onAdd = onAddItem,
+                        onQuantityChange = { value -> onQuantityChange(index, value) },
+                        onDescriptionChange = { value -> onDescriptionChange(index, value) },
+                        onObservationsChange = { value -> onObservationsChange(index, value) },
+                        onGalleryPhotoClick = {
+                            pendingPhotoIndex = index
+                            galleryLauncher.launch("image/*")
+                        },
+                        onCameraPhotoClick = {
+                            pendingPhotoIndex = index
+                            cameraLauncher.launch(null)
+                        },
+                        showValidation = submitAttempted
+                    )
+                }
+            }
+        }
+
+        Button(
+            onClick = onSubmit,
+            enabled = enabledSubmit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AccentColor,
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFFE4E7EC),
+                disabledContentColor = Color(0xFF98A2B3)
+            )
+        ) {
+            Text(if (isSubmitting) "Enviando..." else "Guardar")
+        }
+    }
+}
+
+private suspend fun submitCompleteRequest(
+    api: com.example.myapplication.data.remote.network.ApiService,
+    sections: List<RequestSectionState>,
+    baseFields: SolicitudBaseFields,
+    context: android.content.Context
+): SubmitRequestResult {
+    val multipartParts = mutableListOf<MultipartBody.Part>()
+    sections.forEach { section ->
+        appendSectionParts(
+            section = section,
+            context = context,
+            multipartParts = multipartParts
+        )
+    }
+
+    val hasValidProducts = multipartParts.any {
+        it.headers?.toString()?.contains("id_producto_") == true
+    }
+    if (!hasValidProducts) {
+        return SubmitRequestResult(
+            success = false,
+            message = "No hay productos validos para enviar."
+        )
+    }
+
+    return try {
+        val requestBody = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("id_usuario_solicitante", HARDCODED_SOLICITANTE_USER_ID.toString())
+            .addFormDataPart("es_pedido_compra", "0")
+            .addFormDataPart("justificacion", baseFields.justificacion)
+            .addFormDataPart("fecha_necesaria", baseFields.fechaNecesaria)
+            .addFormDataPart("id_direccion_entrega", baseFields.idDireccionEntrega)
+
+        multipartParts.forEach { requestBody.addPart(it) }
+        logSolicitudPayload(baseFields = baseFields, multipartParts = multipartParts)
+
+        val response = api.registrarSolicitudCompleta(
+            multipartBody = requestBody.build()
+        )
+
+        if (!response.isSuccessful) {
+            val errorBody = response.errorBody()?.string()
+            val backendMessage = extractBackendMessage(errorBody)
+            return SubmitRequestResult(
+                success = false,
+                message = backendMessage ?: "No se pudo registrar la solicitud (${response.code()})."
+            )
+        }
+
+        val bodyObj = response.body()?.asJsonObject
+        val backendSuccess = bodyObj?.get("success").asBooleanOrNull() ?: true
+        val backendMessage = bodyObj?.get("message").asNonBlankStringOrNull()
+            ?: "Solicitud registrada correctamente."
+        val ticket = bodyObj?.get("ticket").asNonBlankStringOrNull()
+
+        if (!backendSuccess) {
+            return SubmitRequestResult(
+                success = false,
+                message = backendMessage
+            )
+        }
+
+        SubmitRequestResult(
+            success = true,
+            message = if (ticket.isNullOrBlank()) backendMessage else "$backendMessage Ticket: $ticket"
+        )
+    } catch (e: Exception) {
+        SubmitRequestResult(
+            success = false,
+            message = "Error enviando solicitud: ${e.message.orEmpty()}"
+        )
+    }
+}
+
+private fun appendSectionParts(
+    section: RequestSectionState,
+    context: android.content.Context,
+    multipartParts: MutableList<MultipartBody.Part>
+) {
+    section.items.forEachIndexed { index, item ->
+        val inventoryId = item.selectedInventoryId ?: return@forEachIndexed
+        val quantityValue = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEachIndexed
+        val category = section.tab.submitCategoryKey
+        Log.d(
+            SOLICITUD_LOG_TAG,
+            "item[$index] categoria=$category id_producto=$inventoryId cantidad=$quantityValue id_area=${item.selectedAreaId} observacion='${item.observations}' fotoAdjunta=${item.hasAttachedPhoto()}"
+        )
+
+        multipartParts += MultipartBody.Part.createFormData(
+            "id_producto_${category}[]",
+            inventoryId.toString()
+        )
+        multipartParts += MultipartBody.Part.createFormData(
+            "cantidad_${category}[]",
+            quantityValue.toString()
+        )
+        multipartParts += MultipartBody.Part.createFormData(
+            "observacion_${category}[]",
+            item.observations
+        )
+        item.selectedAreaId?.let { areaId ->
+            multipartParts += MultipartBody.Part.createFormData(
+                "id_area[]",
+                areaId.toString()
+            )
+        }
+
+        multipartParts += buildPhotoPartOrEmpty(
+            item = item,
+            context = context,
+            partName = "foto_${category}[]",
+            fallbackFileName = "sol_${category}_${inventoryId}_$index.jpg"
+        )
+    }
+}
+
+private fun buildPhotoPartOrEmpty(
+    item: MaterialItemForm,
+    context: android.content.Context,
+    partName: String,
+    fallbackFileName: String
+): MultipartBody.Part {
+    item.photoBitmap?.let { bitmap ->
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val bytes = output.toByteArray()
+        val requestBody = bytes.toRequestBody("image/jpeg".toMediaType())
+        return MultipartBody.Part.createFormData(partName, fallbackFileName, requestBody)
+    }
+
+    val photoUri = item.photoUri ?: return emptyFilePart(partName)
+    val uri = Uri.parse(photoUri)
+    val resolver = context.contentResolver
+    val bytes = resolver.openInputStream(uri)?.use { input -> input.readBytes() }
+        ?: return emptyFilePart(partName)
+    val mimeType = resolver.getType(uri) ?: "image/jpeg"
+    val fileName = uri.lastPathSegment
+        ?.substringAfterLast('/')
+        ?.takeIf { it.isNotBlank() }
+        ?: fallbackFileName
+
+    val requestBody = bytes.toRequestBody(mimeType.toMediaType())
+    return MultipartBody.Part.createFormData(partName, fileName, requestBody)
+}
+
+private fun emptyFilePart(partName: String): MultipartBody.Part {
+    val emptyBody = ByteArray(0).toRequestBody("application/octet-stream".toMediaType())
+    return MultipartBody.Part.createFormData(partName, "", emptyBody)
+}
+
+private fun extractBackendMessage(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching {
+        val obj = JsonParser().parse(raw).asJsonObject
+        obj.get("message").asNonBlankStringOrNull()
+    }.getOrNull()
+}
+
+private fun logSolicitudPayload(
+    baseFields: SolicitudBaseFields,
+    multipartParts: List<MultipartBody.Part>
+) {
+    Log.d(SOLICITUD_LOG_TAG, "POST /api/solicitudes/registrar-completa")
+    Log.d(
+        SOLICITUD_LOG_TAG,
+        "base id_usuario_solicitante=$HARDCODED_SOLICITANTE_USER_ID es_pedido_compra=0 justificacion='${baseFields.justificacion}' fecha_necesaria='${baseFields.fechaNecesaria}' id_direccion_entrega='${baseFields.idDireccionEntrega}'"
+    )
+    multipartParts.forEachIndexed { idx, part ->
+        Log.d(SOLICITUD_LOG_TAG, "part[$idx] ${describeMultipartPart(part)}")
+    }
+}
+
+private fun describeMultipartPart(part: MultipartBody.Part): String {
+    val disposition = part.headers?.get("Content-Disposition").orEmpty()
+    val name = Regex("name=\"([^\"]+)\"")
+        .find(disposition)
+        ?.groupValues
+        ?.getOrNull(1)
+        .orEmpty()
+    val fileName = Regex("filename=\"([^\"]*)\"")
+        .find(disposition)
+        ?.groupValues
+        ?.getOrNull(1)
+    val contentType = part.body.contentType()?.toString().orEmpty()
+    val contentLength = runCatching { part.body.contentLength() }.getOrDefault(-1L)
+    return if (!fileName.isNullOrBlank()) {
+        "name=$name filename=$fileName contentType=$contentType contentLength=$contentLength"
+    } else {
+        "name=$name contentType=$contentType contentLength=$contentLength"
+    }
+}
+
+@Composable
+private fun MaterialItemCard(
+    itemNumber: Int,
+    item: MaterialItemForm,
+    options: List<InventoryOption>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+    onAdd: () -> Unit,
+    onQuantityChange: (String) -> Unit,
+    onDescriptionChange: (InventoryOption) -> Unit,
+    onObservationsChange: (String) -> Unit,
+    onGalleryPhotoClick: () -> Unit,
+    onCameraPhotoClick: () -> Unit,
+    showValidation: Boolean
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val quantityValid = item.quantity.toIntOrNull()?.let { it > 0 } == true
+    val quantityError = when {
+        item.quantity.isBlank() && showValidation -> "Requerida"
+        item.quantity.isNotBlank() && !quantityValid -> "Debe ser mayor a 0"
+        else -> null
+    }
+    val descriptionError = if (
+        showValidation &&
+        (item.description.isBlank() || item.selectedInventoryId == null)
+    ) {
+        "Selecciona un item valido"
+    } else {
+        null
+    }
+    val photoRequiredError = if (
+        showValidation &&
+        item.requiresPreviousProductPhoto &&
+        !item.hasAttachedPhoto()
+    ) {
+        "Debes adjuntar la foto del producto anterior"
+    } else {
+        null
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Solicitudes", style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold))
-            Spacer(modifier = Modifier.weight(1f))
-            // Placeholder for a quick action icon
-            IconButton(onClick = { /* future: open filters/settings */ }) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Opciones")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Search field
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Buscar por nombre o tipo (ej. 'Entrada')") },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            leadingIcon = {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Buscar")
-            }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Filters as small chips
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val options = listOf("Todas", "Pendientes", "Aprobadas", "Rechazadas")
-            options.forEach { opt ->
-                FilterChip(
-                    selected = (opt == selectedFilter),
-                    onClick = { selectedFilter = opt },
-                    label = { Text(opt) }
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = AccentSoft,
+                border = BorderStroke(1.dp, HeaderBorder)
+            ) {
+                Text(
+                    text = "Item $itemNumber",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AccentColor,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .width(44.dp)
+                    .height(44.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = DangerSoft,
+                    border = BorderStroke(1.dp, Color(0xFFFECACA))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(44.dp)
+                            .height(44.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar item",
+                            tint = DangerColor
+                        )
+                    }
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Content list
-        if (filtered.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(text = "No hay solicitudes que coincidan.", color = Color.Gray)
-            }
-        } else {
-            LazyColumn(contentPadding = PaddingValues(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(filtered) { s ->
-                    SolicitudCard(solicitud = s)
+        OutlinedTextField(
+            value = item.quantity,
+            onValueChange = { value ->
+                onQuantityChange(value.filter(Char::isDigit))
+            },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Cantidad") },
+            singleLine = true,
+            isError = quantityError != null,
+            supportingText = {
+                quantityError?.let {
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
                 }
+            },
+            shape = RoundedCornerShape(18.dp),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next
+            ),
+            keyboardActions = KeyboardActions(
+                onNext = { focusManager.clearFocus() }
+            )
+        )
+
+        DescriptionDropdownField(
+            value = item.description,
+            options = options,
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            onValueSelected = onDescriptionChange,
+            isError = descriptionError != null,
+            supportingText = descriptionError
+        )
+
+        OutlinedTextField(
+            value = item.observations,
+            onValueChange = onObservationsChange,
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Observaciones") },
+            minLines = 2,
+            maxLines = 3,
+            shape = RoundedCornerShape(18.dp),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+            )
+        )
+
+        if (item.requiresPreviousProductPhoto) {
+            Text(
+                text = "Este item requiere foto del producto anterior.",
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted
+            )
+
+            PhotoAttachmentSection(
+                photoUri = item.photoUri,
+                photoBitmap = item.photoBitmap,
+                onGalleryClick = onGalleryPhotoClick,
+                onCameraClick = onCameraPhotoClick,
+                isRequired = true,
+                requiredError = photoRequiredError
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onAdd,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = AccentSoft,
+                    contentColor = AccentColor
+                )
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+            }
+
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = DangerColor
+                )
+            ) {
+                Icon(imageVector = Icons.Default.Delete, contentDescription = null)
             }
         }
     }
 }
 
 @Composable
-private fun SolicitudCard(solicitud: Solicitud) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Row(modifier = Modifier
-            .fillMaxWidth()
-            .padding(12.dp)) {
-
-            // Avatar / placeholder
+private fun PhotoAttachmentSection(
+    photoUri: String?,
+    photoBitmap: Bitmap?,
+    onGalleryClick: () -> Unit,
+    onCameraClick: () -> Unit,
+    isRequired: Boolean,
+    requiredError: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, CardBorder)
+        ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFFEEEEEE)),
+                    .fillMaxWidth()
+                    .height(126.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = Icons.Filled.Person, contentDescription = "Usuario", tint = Color(0xFF666666))
+                when {
+                    photoBitmap != null -> Image(
+                        bitmap = photoBitmap.asImageBitmap(),
+                        contentDescription = "Foto adjunta",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    !photoUri.isNullOrBlank() -> AsyncImage(
+                        model = Uri.parse(photoUri),
+                        contentDescription = "Foto adjunta",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    else -> Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Sin foto",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = BrandMuted,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "Adjunta una imagen o toma una foto",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandMuted
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onGalleryClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = AccentSoft,
+                    contentColor = AccentColor
+                )
+            ) {
+                Text("Galeria")
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedButton(
+                onClick = onCameraClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BrandBorder),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AccentColor
+                )
+            ) {
+                Text("Camara")
+            }
+        }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = solicitud.user, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Spacer(modifier = Modifier.weight(1f))
-                    StatusPill(status = solicitud.status)
+        if (isRequired) {
+            Text(
+                text = if (requiredError == null) {
+                    "Foto obligatoria para este producto."
+                } else {
+                    requiredError
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (requiredError == null) BrandMuted else MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+private fun extractInventoryOptionsForArea(root: JsonElement?, targetAreaId: Int): List<InventoryOption> {
+    if (root == null || root.isJsonNull) return emptyList()
+
+    // Fast path for payload:
+    // { success, message, data: [{ id_area, producto, ... }] }
+    val dataArray = root
+        .takeIf { it.isJsonObject }
+        ?.asJsonObject
+        ?.getAsJsonArray("data")
+
+    if (dataArray != null) {
+        fun collectOptions(filterByArea: Boolean): List<InventoryOption> {
+            val options = linkedMapOf<Int, InventoryOption>()
+            dataArray.forEach { item ->
+                if (!item.isJsonObject) return@forEach
+                val obj = item.asJsonObject
+                val areaId = obj.get("id_area").asIntOrNull()
+                if (filterByArea && areaId != null && areaId != targetAreaId) return@forEach
+
+                val inventoryId = extractInventoryId(obj) ?: return@forEach
+                val label = obj.get("producto").asNonBlankStringOrNull() ?: extractProductLabel(obj)
+                val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
+                if (!label.isNullOrBlank()) {
+                    val previous = options[inventoryId]
+                    options[inventoryId] = InventoryOption(
+                        inventoryId = inventoryId,
+                        areaId = areaId,
+                        label = label,
+                        requiresPreviousProductPhoto = (previous?.requiresPreviousProductPhoto == true) || requiresPhoto
+                    )
                 }
+            }
+            return options.values.toList()
+        }
 
-                Spacer(modifier = Modifier.height(6.dp))
+        // Prefer match by id_area, but if backend now groups by tipo_responsable
+        // and returns another id_area, keep all returned items.
+        val scoped = collectOptions(filterByArea = true)
+        if (scoped.isNotEmpty()) return scoped
 
-                Text(text = solicitud.type, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = solicitud.date, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        val unscoped = collectOptions(filterByArea = false)
+        if (unscoped.isNotEmpty()) return unscoped
+    }
 
-                Spacer(modifier = Modifier.height(8.dp))
+    // Fallback for non-standard payloads.
+    return extractInventoryOptionsByArea(root)[targetAreaId].orEmpty()
+}
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { /* ver detalles */ }, enabled = false) {
-                        Text("Ver")
-                    }
-                    OutlinedButton(onClick = { /* acciones (aprobar/rechazar) */ }, enabled = false) {
-                        Text("Acciones")
-                    }
-                }
+private fun extractInventoryOptionsByArea(root: JsonElement?): Map<Int, List<InventoryOption>> {
+    if (root == null || root.isJsonNull) return emptyMap()
+
+    val collector = mutableMapOf<Int, LinkedHashMap<Int, InventoryOption>>()
+    collectInventoryOptions(root, collector)
+
+    return collector.mapValues { (_, value) -> value.values.toList() }
+}
+
+private fun collectInventoryOptions(
+    element: JsonElement,
+    collector: MutableMap<Int, LinkedHashMap<Int, InventoryOption>>
+) {
+    when {
+        element.isJsonArray -> {
+            element.asJsonArray.forEach { child ->
+                collectInventoryOptions(child, collector)
+            }
+        }
+
+        element.isJsonObject -> {
+            val obj = element.asJsonObject
+            val areaId = obj.get("id_area").asIntOrNull()
+            val inventoryId = extractInventoryId(obj)
+            val label = extractProductLabel(obj)
+            val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
+            if (areaId != null && inventoryId != null && !label.isNullOrBlank()) {
+                val areaCollector = collector.getOrPut(areaId) { linkedMapOf() }
+                val previous = areaCollector[inventoryId]
+                areaCollector[inventoryId] = InventoryOption(
+                    inventoryId = inventoryId,
+                    areaId = areaId,
+                    label = label,
+                    requiresPreviousProductPhoto = (previous?.requiresPreviousProductPhoto == true) || requiresPhoto
+                )
+            }
+
+            obj.entrySet().forEach { (_, child) ->
+                collectInventoryOptions(child, collector)
             }
         }
     }
 }
 
-@Composable
-private fun StatusPill(status: RequestStatus) {
-    val (text, color) = when (status) {
-        RequestStatus.PENDING -> "Pendiente" to Color(0xFFFFA000)
-        RequestStatus.APPROVED -> "Aprobada" to Color(0xFF4CAF50)
-        RequestStatus.REJECTED -> "Rechazada" to Color(0xFFF44336)
+private fun extractInventoryId(obj: JsonObject): Int? {
+    val candidateKeys = listOf(
+        "id_inventario",
+        "id_producto",
+        "id_item",
+        "inventario_id",
+        "id"
+    )
+    for (key in candidateKeys) {
+        val value = obj.get(key).asIntOrNull()
+        if (value != null) return value
+    }
+    return null
+}
+
+private fun extractProductLabel(obj: JsonObject): String? {
+    val candidateKeys = listOf(
+        "nombre",
+        "name",
+        "descripcion",
+        "description",
+        "producto",
+        "nombre_producto",
+        "nombre_item",
+        "producto_nombre",
+        "item_nombre",
+        "item"
+    )
+
+    for (key in candidateKeys) {
+        val text = obj.get(key).asNonBlankStringOrNull()
+        if (text != null) return text
     }
 
-    Box(
-        modifier = Modifier
-            .background(color.copy(alpha = 0.12f), shape = RoundedCornerShape(16.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(text = text, color = color, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+    return null
+}
+
+private fun JsonElement?.asIntOrNull(): Int? {
+    if (this == null || isJsonNull || !isJsonPrimitive) return null
+    return runCatching { asInt }.getOrNull()
+}
+
+private fun JsonElement?.asBooleanOrNull(): Boolean? {
+    if (this == null || isJsonNull || !isJsonPrimitive) return null
+
+    val primitive = asJsonPrimitive
+    if (primitive.isBoolean) return primitive.asBoolean
+    if (primitive.isNumber) return primitive.asInt != 0
+    if (primitive.isString) {
+        return when (primitive.asString.trim().lowercase()) {
+            "true", "1", "si", "sí", "yes" -> true
+            "false", "0", "no" -> false
+            else -> null
+        }
+    }
+
+    return null
+}
+
+private fun JsonElement?.asNonBlankStringOrNull(): String? {
+    if (this == null || isJsonNull || !isJsonPrimitive) return null
+    return runCatching { asString.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+}
+
+private fun MaterialItemForm.hasAttachedPhoto(): Boolean {
+    return photoBitmap != null || !photoUri.isNullOrBlank()
+}
+
+@Composable
+private fun DescriptionDropdownField(
+    value: String,
+    options: List<InventoryOption>,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onValueSelected: (InventoryOption) -> Unit,
+    isError: Boolean,
+    supportingText: String?
+) {
+    var query by remember(value) { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val filteredCandidates = remember(query, options) {
+        val sequence = if (query.isBlank()) {
+            options.asSequence()
+        } else {
+            options.asSequence().filter { it.label.contains(query, ignoreCase = true) }
+        }
+        sequence.take(MAX_DROPDOWN_OPTIONS + 1).toList()
+    }
+    val filteredOptions = filteredCandidates.take(MAX_DROPDOWN_OPTIONS)
+    val hasMoreResults = filteredCandidates.size > MAX_DROPDOWN_OPTIONS
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val menuWidth = maxWidth
+
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = {},
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onExpandedChange(true) },
+                placeholder = { Text("Seleccionar item") },
+                trailingIcon = {
+                    IconButton(onClick = { onExpandedChange(!expanded) }) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null
+                        )
+                    }
+                },
+                readOnly = true,
+                singleLine = true,
+                isError = isError,
+                supportingText = {
+                    supportingText?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                shape = RoundedCornerShape(18.dp)
+            )
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = {
+                    query = ""
+                    onExpandedChange(false)
+                },
+                modifier = Modifier.width(menuWidth)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Buscar") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    if (filteredOptions.isEmpty()) {
+                        Text(
+                            text = "Sin resultados",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                            color = BrandMuted,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 280.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            filteredOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = option.label,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    },
+                                    onClick = {
+                                        onValueSelected(option)
+                                        query = ""
+                                        onExpandedChange(false)
+                                    }
+                                )
+                            }
+                        }
+
+                        if (hasMoreResults) {
+                            Text(
+                                text = "Mostrando primeros $MAX_DROPDOWN_OPTIONS resultados. Escribe para refinar.",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                color = BrandMuted,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

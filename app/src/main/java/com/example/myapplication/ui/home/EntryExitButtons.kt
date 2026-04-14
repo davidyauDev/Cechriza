@@ -1,26 +1,34 @@
 package com.example.myapplication.ui.home
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.local.entity.AttendanceType
 
-@Suppress("DEPRECATION")
 @Composable
 fun EntryExitButtons(
     onEntry: () -> Unit,
@@ -28,67 +36,109 @@ fun EntryExitButtons(
     isBusy: Boolean = false,
     activeType: AttendanceType = AttendanceType.ENTRADA
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder)
     ) {
-        // Entrada (verde)
-        Button(
-            onClick = onEntry,
-            enabled = !isBusy,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)), // Verde moderno
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (isBusy && activeType == AttendanceType.ENTRADA) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = "Entrada",
-                    tint = Color.White
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("ENTRADA", color = Color.White)
-            }
-        }
+            Text(
+                text = "Marcar asistencia",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = BrandText
+            )
 
-        // Salida (rojo)
-        OutlinedButton(
-            onClick = onExit,
-            enabled = !isBusy,
-            border = BorderStroke(1.dp, Color(0xFFB71C1C)), // Rojo oscuro
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            if (isBusy && activeType == AttendanceType.SALIDA) {
-                CircularProgressIndicator(
-                    color = Color(0xFFB71C1C),
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(20.dp)
+            Text(
+                text = "Elige Entrada o Salida para registrar",
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                QuickActionTile(
+                    modifier = Modifier.weight(1f),
+                    label = "ENTRADA",
+                    icon = Icons.Default.ArrowUpward,
+                    accent = BrandBlue,
+                    container = BrandBlue,
+                    contentColor = Color.White,
+                    isBusy = isBusy && activeType == AttendanceType.ENTRADA,
+                    onClick = onEntry
                 )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Salida",
-                    tint = Color(0xFFB71C1C)
+                QuickActionTile(
+                    modifier = Modifier.weight(1f),
+                    label = "SALIDA",
+                    icon = Icons.Default.ArrowDownward,
+                    accent = BrandOrangeSoft,
+                    container = Color(0xFFAF4B00),
+                    contentColor = Color.White,
+                    isBusy = isBusy && activeType == AttendanceType.SALIDA,
+                    onClick = onExit
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("SALIDA", color = Color(0xFFB71C1C))
             }
         }
     }
 }
 
+@Composable
+private fun QuickActionTile(
+    modifier: Modifier = Modifier,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accent: Color,
+    container: Color,
+    contentColor: Color,
+    isBusy: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(108.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = container,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(Color.White.copy(alpha = 0.20f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isBusy) {
+                    CircularProgressIndicator(
+                        color = contentColor,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = contentColor
+                    )
+                }
+            }
 
+            Text(
+                text = label,
+                color = contentColor,
+                fontWeight = FontWeight.SemiBold
+            )
 
+            Spacer(modifier = Modifier.height(1.dp))
+        }
+    }
+}

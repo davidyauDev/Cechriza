@@ -75,7 +75,7 @@ fun EventosCarouselBanner(eventos: List<EventoConImagen>) {
                 horizontalArrangement = Arrangement.Center
             ) {
                 repeat(eventos.size) { index ->
-                    val color = if (pagerState.currentPage == index) Color.Gray else Color.LightGray
+                    val color = if (pagerState.currentPage == index) BrandBlue else BrandBorder
                     Box(
                         modifier = Modifier
                             .padding(2.dp)
@@ -93,7 +93,7 @@ fun EventosCarouselBanner(eventos: List<EventoConImagen>) {
                 ) {
                     Box(
                         modifier = Modifier
-                            .background(Color(0xFFFFC107), shape = RoundedCornerShape(8.dp))
+                            .background(BrandOrange, shape = RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -106,7 +106,7 @@ fun EventosCarouselBanner(eventos: List<EventoConImagen>) {
                     Text(
                         text = current.eventoFecha,
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = BrandMuted
                     )
                 }
 
@@ -116,13 +116,13 @@ fun EventosCarouselBanner(eventos: List<EventoConImagen>) {
                     text = current.eventoTitulo,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = BrandText
                 )
 
                 Text(
                     text = current.imagen.descripcion.orEmpty(),
                     fontSize = 13.sp,
-                    color = Color(0xFF0051A8),
+                    color = BrandBlue,
                     fontWeight = FontWeight.SemiBold
                 )
 
@@ -131,7 +131,7 @@ fun EventosCarouselBanner(eventos: List<EventoConImagen>) {
                 Text(
                     text = current.eventoDescripcion,
                     fontSize = 12.sp,
-                    color = Color.DarkGray
+                    color = BrandMuted
                 )
             }
         }

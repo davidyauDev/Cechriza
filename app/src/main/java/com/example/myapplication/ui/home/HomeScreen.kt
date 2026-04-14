@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.home
+﻿package com.example.myapplication.ui.home
 
 import android.app.Activity
 import android.content.Context
@@ -12,19 +12,27 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ExperimentalGetImage
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavController
 import com.example.myapplication.data.local.entity.AttendanceType
 import com.example.myapplication.ui.Attendance.AttendanceViewModel
@@ -98,6 +106,61 @@ fun tryGetMockLocationAppName(context: Context): String? {
     } catch (_: Exception) { null }
 }
 
+@Composable
+private fun DrawerCardItem(
+    title: String,
+    subtitle: String,
+    badge: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    accent: Color = BrandBlue,
+    accentSoft: Color = BrandBlueSoft
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) accentSoft else Color.White,
+        border = BorderStroke(1.dp, if (selected) accent.copy(alpha = 0.25f) else BrandBorder)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(accentSoft, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = badge,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 @ExperimentalGetImage
 @Composable
 fun HomeScreen(
@@ -128,10 +191,16 @@ fun HomeScreen(
     var isCheckingPermissions by remember { mutableStateOf(false) }
     var isNavigatingToCamera by remember { mutableStateOf(false) }
     var isLoadingLocation by remember { mutableStateOf(false) }
+    var locationEnabled by remember { mutableStateOf(isLocationEnabled(context)) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val userViewModel: UserViewModel = viewModel()
     val userName by userViewModel.userName.collectAsState()
+    val userEmail by userViewModel.userEmail.collectAsState()
+    val fullName = remember(userName) {
+        userName.trim().takeIf { it.isNotBlank() } ?: "Usuario"
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val currentDate = remember { mutableStateOf("") }
     var currentAttendanceType by remember { mutableStateOf(AttendanceType.ENTRADA) }
@@ -152,8 +221,39 @@ fun HomeScreen(
         currentDate.value = SimpleDateFormat("EEEE dd, MMM yyyy", Locale("es")).format(Date())
     }
 
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                locationEnabled = isLocationEnabled(context)
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerCoroutineScope = rememberCoroutineScope()
+    val eventos = (eventosHoy as? UiState.Success<EventosHoyResponse>)?.data?.data?.events.orEmpty()
+    val eventosConImagenes = remember(eventos) {
+        eventos.flatMap { evento ->
+            evento.imagenes.map { imagen ->
+                EventoConImagen(
+                    imagen = imagen,
+                    eventoTitulo = evento.titulo,
+                    eventoDescripcion = evento.descripcion,
+                    eventoFecha = evento.fecha
+                )
+            }
+        }
+    }
+    val eventsCountText = when (val state = eventosHoy) {
+        is UiState.Success -> state.data.data.events.size.toString()
+        is UiState.Error -> "0"
+        UiState.Loading -> "--"
+    }
 
     fun openLocationSettings(ctx: Context) {
         try {
@@ -196,10 +296,10 @@ fun HomeScreen(
 
         if (cameraGranted && locationGranted) {
             coroutineScope.launch {
-                if (!isLocationEnabled(context)) {
+                if (!locationEnabled) {
                     isCheckingPermissions = false
                     showEnableLocationDialog = true
-                    val res = snackbarHostState.showSnackbar("GPS desactivado. Actívalo para registrar tu asistencia.", "Abrir ajustes")
+                    val res = snackbarHostState.showSnackbar("GPS desactivado. ActÃ­valo para registrar tu asistencia.", "Abrir ajustes")
                     if (res == SnackbarResult.ActionPerformed) openLocationSettings(context)
                     return@launch
                 }
@@ -227,26 +327,26 @@ fun HomeScreen(
 
                     is LocationResult.Error -> {
                         val message = when (result.reason) {
-                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicación. Actívalos en Ajustes."
-                            LocationError.GPS_DISABLED -> "Tu GPS está desactivado. Actívalo e inténtalo nuevamente."
-                            LocationError.TIMEOUT -> "El GPS tardó demasiado en responder. Intenta moverte o verifica la señal."
-                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicación. Intenta nuevamente."
-                            LocationError.INACCURATE -> "La señal GPS es imprecisa. Busca un lugar más abierto e inténtalo otra vez."
-                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicación."
+                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicaciÃ³n. ActÃ­valos en Ajustes."
+                            LocationError.GPS_DISABLED -> "Tu GPS estÃ¡ desactivado. ActÃ­valo e intÃ©ntalo nuevamente."
+                            LocationError.TIMEOUT -> "El GPS tardÃ³ demasiado en responder. Intenta moverte o verifica la seÃ±al."
+                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicaciÃ³n. Intenta nuevamente."
+                            LocationError.INACCURATE -> "La seÃ±al GPS es imprecisa. Busca un lugar mÃ¡s abierto e intÃ©ntalo otra vez."
+                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicaciÃ³n."
                         }
 
-                        // Aseguramos visibilidad: log + toast + snackbar + diálogo modal
+                        // Aseguramos visibilidad: log + toast + snackbar + diÃ¡logo modal
                         Log.d("HomeScreen", "Location error: ${result.reason} -> $message")
                         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(message)
                         }
 
-                        // Mostrar diálogo modal para asegurar visibilidad
+                        // Mostrar diÃ¡logo modal para asegurar visibilidad
                         locationErrorMessage = message
                         showLocationErrorDialog = true
 
-                        // Acciones específicas para guiar al usuario
+                        // Acciones especÃ­ficas para guiar al usuario
                         when (result.reason) {
                             LocationError.GPS_DISABLED -> {
                                 showEnableLocationDialog = true
@@ -266,8 +366,8 @@ fun HomeScreen(
 
         //  Permisos no concedidos
         val missing = mutableListOf<String>()
-        if (!cameraGranted) missing.add("Cámara")
-        if (!locationGranted) missing.add("Ubicación")
+        if (!cameraGranted) missing.add("CÃ¡mara")
+        if (!locationGranted) missing.add("UbicaciÃ³n")
 
         var anyPermanentlyDenied = false
         if (activity != null) {
@@ -293,7 +393,7 @@ fun HomeScreen(
             showAppSettingsDialog = true
         } else {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar("Faltan permisos: ${missing.joinToString(", ")}. Por favor habilítalos.")
+                snackbarHostState.showSnackbar("Faltan permisos: ${missing.joinToString(", ")}. Por favor habilÃ­talos.")
             }
         }
         isCheckingPermissions = false
@@ -305,11 +405,11 @@ fun HomeScreen(
         isCheckingPermissions = true
         currentAttendanceType = type
 
-        if (!isLocationEnabled(context)) {
+        if (!locationEnabled) {
             isCheckingPermissions = false
             showEnableLocationDialog = true
             coroutineScope.launch {
-                val res = snackbarHostState.showSnackbar("GPS desactivado. Actívalo para registrar tu asistencia.", "Abrir ajustes")
+                val res = snackbarHostState.showSnackbar("GPS desactivado. ActÃ­valo para registrar tu asistencia.", "Abrir ajustes")
                 if (res == SnackbarResult.ActionPerformed) openLocationSettings(context)
             }
             return
@@ -340,26 +440,26 @@ fun HomeScreen(
 
                     is LocationResult.Error -> {
                         val message = when (result.reason) {
-                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicación. Actívalos en Ajustes."
-                            LocationError.GPS_DISABLED -> "Tu GPS está desactivado. Actívalo e inténtalo nuevamente."
-                            LocationError.TIMEOUT -> "El GPS tardó demasiado en responder. Intenta moverte o verifica la señal."
-                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicación. Intenta nuevamente."
-                            LocationError.INACCURATE -> "La señal GPS es imprecisa. Busca un lugar más abierto e inténtalo otra vez."
-                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicación."
+                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicaciÃ³n. ActÃ­valos en Ajustes."
+                            LocationError.GPS_DISABLED -> "Tu GPS estÃ¡ desactivado. ActÃ­valo e intÃ©ntalo nuevamente."
+                            LocationError.TIMEOUT -> "El GPS tardÃ³ demasiado en responder. Intenta moverte o verifica la seÃ±al."
+                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicaciÃ³n. Intenta nuevamente."
+                            LocationError.INACCURATE -> "La seÃ±al GPS es imprecisa. Busca un lugar mÃ¡s abierto e intÃ©ntalo otra vez."
+                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicaciÃ³n."
                         }
 
-                        // Aseguramos visibilidad: log + toast + snackbar + diálogo modal
+                        // Aseguramos visibilidad: log + toast + snackbar + diÃ¡logo modal
                         Log.d("HomeScreen", "Location error: ${result.reason} -> $message")
                         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar(message)
                         }
 
-                        // Mostrar diálogo modal para asegurar visibilidad
+                        // Mostrar diÃ¡logo modal para asegurar visibilidad
                         locationErrorMessage = message
                         showLocationErrorDialog = true
 
-                        // Acciones específicas para guiar al usuario
+                        // Acciones especÃ­ficas para guiar al usuario
                         when (result.reason) {
                             LocationError.GPS_DISABLED -> {
                                 showEnableLocationDialog = true
@@ -401,7 +501,7 @@ fun HomeScreen(
         }
 
         if (shouldShowRationaleAny) {
-            rationaleMessage = "La app necesita acceso a cámara y ubicación para registrar tu asistencia."
+            rationaleMessage = "La app necesita acceso a cÃ¡mara y ubicaciÃ³n para registrar tu asistencia."
             showRationaleDialog = true
         } else {
             permissionLauncher.launch(toRequest.toTypedArray())
@@ -411,45 +511,136 @@ fun HomeScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                Spacer(modifier = Modifier.height(12.dp))
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                    TextButton(onClick = {
-                        selectedDrawerItem = "Home"
-                        drawerCoroutineScope.launch { drawerState.close() }
-                    }) { Text("Inicio") }
-                    HorizontalDivider()
+            ModalDrawerSheet(
+                drawerContainerColor = BrandSurface,
+                drawerTonalElevation = 0.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = 320.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, BrandBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .background(BrandBlueSoft, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = fullName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "U",
+                                        color = BrandBlueDark,
+                                        fontWeight = FontWeight.SemiBold,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
 
-
-
-                   TextButton(onClick = {
-                        selectedDrawerItem = "Routes"
-                        drawerCoroutineScope.launch {
-                            drawerState.close()
-                            navController.navigate("routes")
-                        }
-                    }) { Text("Rutas del día") }
-                    HorizontalDivider()
-
-
-
-
-                    TextButton(onClick = {
-                        selectedDrawerItem = "Logout"
-                        drawerCoroutineScope.launch {
-                            drawerState.close()
-                            Toast.makeText(context, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show()
-                            navController.navigate("login") {
-                                popUpTo("home") { inclusive = true }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Cuenta activa",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted
+                                    )
+                                    Text(
+                                        text = fullName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = BrandText,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = userEmail.takeIf { it.isNotBlank() } ?: " ",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
-                            userViewModel.clearUser()
+
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = BrandBlueSoft,
+                                border = BorderStroke(1.dp, BrandBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Estado",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BrandMuted
+                                        )
+                                        Text(
+                                            text = "Lista para usar",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = BrandBlueDark,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Text(
+                                        text = "●",
+                                        color = BrandBlueDark,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
-                    }) { Text("Cerrar Sesión") }
+                    }
 
-                    HorizontalDivider()
+                    Text(
+                        text = "Navegación",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = BrandMuted,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
 
+                    DrawerCardItem(
+                        title = "Inicio",
+                        subtitle = "Vista principal",
+                        badge = "H",
+                        selected = selectedDrawerItem == "Home",
+                        onClick = {
+                            selectedDrawerItem = "Home"
+                            drawerCoroutineScope.launch { drawerState.close() }
+                        }
+                    )
 
+                    DrawerCardItem(
+                        title = "Rutas del día",
+                        subtitle = "Recorridos asignados",
+                        badge = "R",
+                        selected = selectedDrawerItem == "Routes",
+                        onClick = {
+                            selectedDrawerItem = "Routes"
+                            drawerCoroutineScope.launch {
+                                drawerState.close()
+                                navController.navigate("routes")
+                            }
+                        }
+                    )
 
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -460,112 +651,124 @@ fun HomeScreen(
             Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(Color(0xFFF2F4F6)) // Gris claro de fondo
+                    .background(BrandSurface)
                     .padding(paddingValues)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    BlueHeaderWithName(
-                        userName = userName,
+                    AppHeader(
+                        title = "Inicio",
+                        subtitle = fullName,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(70.dp)
+                            .height(72.dp)
                             .zIndex(1f),
-                        onMenuClick = { drawerCoroutineScope.launch { drawerState.open() } }
+                        showMenuButton = true,
+                        showNotificationButton = true,
+                        onMenuClick = { drawerCoroutineScope.launch { drawerState.open() } },
+                        onNotificationClick = { navController.navigate("notifications") }
                     )
 
-                    if (!isLocationEnabled(context)) {
-                        Box(
+                    if (!locationEnabled) {
+                        Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f))
-                                .padding(8.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, BrandOrangeSoft)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Ubicación desactivada. Actívala para registrar asistencia.", modifier = Modifier.weight(1f))
+                                Text(
+                                    text = "Ubicacion desactivada. Activala para registrar asistencia.",
+                                    modifier = Modifier.weight(1f),
+                                    color = BrandText
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                TextButton(onClick = { openLocationSettings(context) }) { Text("Activar ubicación") }
+                                TextButton(onClick = { openLocationSettings(context) }) { Text("Activar") }
                             }
                         }
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {
-
-                            when (eventosHoy) {
-
-                                is UiState.Loading -> {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator()
-                                    }
-                                }
-
-
-                                is UiState.Error -> {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Text("Sin conexión a internet")
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Button(onClick = { homeViewModel.loadEventosHoy() }) {
-                                            Text("Reintentar")
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                when (eventosHoy) {
+                                    is UiState.Loading -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(140.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(color = BrandBlue)
                                         }
                                     }
-                                }
 
-                                is UiState.Success -> {
-
-                                    val eventos =
-                                        (eventosHoy as UiState.Success<EventosHoyResponse>)
-                                            .data
-                                            .data
-                                            .events
-
-                                    val eventosConImagenes = remember(eventos) {
-                                        eventos.flatMap { evento ->
-                                            evento.imagenes.map { imagen ->
-                                                EventoConImagen(
-                                                    imagen = imagen,
-                                                    eventoTitulo = evento.titulo,
-                                                    eventoDescripcion = evento.descripcion,
-                                                    eventoFecha = evento.fecha
+                                    is UiState.Error -> {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(22.dp),
+                                            color = Color.White,
+                                            border = BorderStroke(1.dp, BrandBorder)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(16.dp),
+                                                horizontalAlignment = Alignment.Start,
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Sin conexion a internet",
+                                                    color = BrandText,
+                                                    fontWeight = FontWeight.SemiBold
                                                 )
+                                                Text(
+                                                    text = "No pudimos cargar los eventos de hoy.",
+                                                    color = BrandMuted
+                                                )
+                                                Button(
+                                                    onClick = { homeViewModel.loadEventosHoy() },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                                                ) {
+                                                    Text("Reintentar")
+                                                }
                                             }
                                         }
                                     }
 
-                                    if (eventosConImagenes.isNotEmpty()) {
-                                        EventosCarouselBanner(eventos = eventosConImagenes)
+                                    is UiState.Success -> {
+                                        if (eventosConImagenes.isNotEmpty()) {
+                                            EventosCarouselBanner(eventos = eventosConImagenes)
+                                        }
                                     }
                                 }
+
+                                EntryExitButtons(
+                                    onEntry = { startAttendanceFlow(AttendanceType.ENTRADA) },
+                                    onExit = { startAttendanceFlow(AttendanceType.SALIDA) },
+                                    isBusy = (isCheckingPermissions || isLoadingLocation || isNavigatingToCamera),
+                                    activeType = currentAttendanceType
+                                )
+
+                                LastMarkText(viewModel = attendanceViewModel)
                             }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            EntryExitButtons(
-                                onEntry = { startAttendanceFlow(AttendanceType.ENTRADA) },
-                                onExit = { startAttendanceFlow(AttendanceType.SALIDA) },
-                                isBusy = (isCheckingPermissions || isLoadingLocation || isNavigatingToCamera),
-                                activeType = currentAttendanceType
-                            )
-
-                            LastMarkText(viewModel = attendanceViewModel)
                         }
                     }
 
                 }
 
                 if (isLoadingLocation) {
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -575,14 +778,14 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Color.White)
+                            CircularProgressIndicator(color = BrandOrange)
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Obteniendo ubicación...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text("Obteniendo ubicaciÃ³n...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
 
-                // Diálogos comunes
+                // DiÃ¡logos comunes
                 if (showRationaleDialog) {
                     AlertDialog(
                         onDismissRequest = { showRationaleDialog = false; isCheckingPermissions = false },
@@ -628,11 +831,11 @@ fun HomeScreen(
                                 showEnableLocationDialog = false
                                 isCheckingPermissions = false
                                 openLocationSettings(context)
-                            }) { Text("Abrir ajustes de ubicación") }
+                            }) { Text("Abrir ajustes de ubicaciÃ³n") }
                         },
                         dismissButton = { TextButton(onClick = { showEnableLocationDialog = false }) { Text("Cancelar") } },
-                        title = { Text("Ubicación desactivada") },
-                        text = { Text("La ubicación (GPS) está desactivada. Actívala para que la app pueda obtener tu posición al registrar la asistencia.") }
+                        title = { Text("UbicaciÃ³n desactivada") },
+                        text = { Text("La ubicaciÃ³n (GPS) estÃ¡ desactivada. ActÃ­vala para que la app pueda obtener tu posiciÃ³n al registrar la asistencia.") }
                     )
                 }
 
@@ -660,19 +863,19 @@ fun HomeScreen(
                             }) { Text("Abrir ajustes") }
                         },
                         dismissButton = { TextButton(onClick = { showMockLocationDialog = false; isCheckingPermissions = false }) { Text("Cancelar") } },
-                        title = { Text("Ubicación posiblemente falsa") },
-                        text = { Text(if (mockLocationAppName != null) "Se detectó que la ubicación podría ser falsificada por ${mockLocationAppName}. Desactiva o desinstala esa aplicación y vuelve a intentarlo." else "Se detectó que la ubicación podría ser falsificada. Desactiva apps de ubicación falsa (mock) y vuelve a intentarlo.") }
+                        title = { Text("UbicaciÃ³n posiblemente falsa") },
+                        text = { Text(if (mockLocationAppName != null) "Se detectÃ³ que la ubicaciÃ³n podrÃ­a ser falsificada por ${mockLocationAppName}. Desactiva o desinstala esa aplicaciÃ³n y vuelve a intentarlo." else "Se detectÃ³ que la ubicaciÃ³n podrÃ­a ser falsificada. Desactiva apps de ubicaciÃ³n falsa (mock) y vuelve a intentarlo.") }
                     )
                 }
 
-                // Diálogo de error de ubicación (asegura visibilidad)
+                // DiÃ¡logo de error de ubicaciÃ³n (asegura visibilidad)
                 if (showLocationErrorDialog) {
                     AlertDialog(
                         onDismissRequest = { showLocationErrorDialog = false },
                         confirmButton = {
                             TextButton(onClick = { showLocationErrorDialog = false }) { Text("Aceptar") }
                         },
-                        title = { Text("Error de ubicación") },
+                        title = { Text("Error de ubicaciÃ³n") },
                         text = { Text(locationErrorMessage) }
                     )
                 }
@@ -680,3 +883,4 @@ fun HomeScreen(
         }
     }
 }
+
