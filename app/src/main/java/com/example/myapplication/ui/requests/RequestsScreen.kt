@@ -5,7 +5,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -33,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,7 +49,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -104,7 +107,8 @@ private const val MAX_DROPDOWN_OPTIONS = 80
 private const val SOLICITUD_LOG_TAG = "SolicitudCompleta"
 private const val HARDCODED_SOLICITANTE_USER_ID = 14
 private const val DEFAULT_JUSTIFICACION = "Pedido interno"
-private const val DEFAULT_ID_DIRECCION_ENTREGA = "5"
+private const val DEFAULT_ID_DIRECCION_ENTREGA_LIMA = "5"
+private const val DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA = "6"
 
 private val ScreenBackground = BrandSurface
 private val HeaderBackground = BrandBlueSoft
@@ -125,9 +129,18 @@ private enum class RequestTab(
     val inventoryResponsable: String,
     val submitCategoryKey: String
 ) {
-    Materials("Insumos", BrandBlue, 7, "LOGISTICA", "insumos"),
-    Tools("Herram.", BrandOrange, 12, "SSGG", "ssgg"),
+    Materials("Insumos/Materiales", BrandBlue, 7, "LOGISTICA", "insumos"),
+    Tools("Cilbradores / herramientas", BrandOrange, 12, "SSGG", "ssgg"),
     Epp("EPP", BrandBlueDark, 11, "SSOMA", "rrhh")
+}
+
+private enum class DeliveryZone(
+    val label: String,
+    val idDireccionEntrega: String,
+    val ubicacionValue: String
+) {
+    Lima("Lima", DEFAULT_ID_DIRECCION_ENTREGA_LIMA, "LIMA"),
+    Provincia("Provincia", DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA, "PROVINCIA")
 }
 
 private data class InventoryOption(
@@ -176,14 +189,66 @@ private data class SubmitRequestResult(
 private data class SolicitudBaseFields(
     val justificacion: String,
     val fechaNecesaria: String,
-    val idDireccionEntrega: String
+    val idDireccionEntrega: String,
+    val esPedidoCompra: Boolean,
+    val ubicacion: String
 )
 
-private fun defaultSolicitudBaseFields(): SolicitudBaseFields {
+private data class RequestConfirmationItem(
+    val quantity: String,
+    val description: String,
+    val observations: String?,
+    val photoStatus: String?
+)
+
+private data class RequestConfirmationSection(
+    val title: String,
+    val items: List<RequestConfirmationItem>
+)
+
+private fun buildRequestConfirmationSections(
+    sections: List<RequestSectionState>
+): List<RequestConfirmationSection> {
+    return sections.mapNotNull { section ->
+        val summaryItems = section.items.map { item ->
+            val quantity = item.quantity.toIntOrNull()?.toString() ?: item.quantity.ifBlank { "0" }
+            val photoStatus = if (!item.requiresPreviousProductPhoto) {
+                null
+            } else if (item.hasAttachedPhoto()) {
+                "Foto del producto anterior: adjunta"
+            } else {
+                "Foto del producto anterior: pendiente"
+            }
+
+            RequestConfirmationItem(
+                quantity = quantity,
+                description = item.description,
+                observations = item.observations.trim().takeIf { it.isNotBlank() },
+                photoStatus = photoStatus
+            )
+        }
+
+        if (summaryItems.isEmpty()) {
+            null
+        } else {
+            RequestConfirmationSection(
+                title = section.title,
+                items = summaryItems
+            )
+        }
+    }
+}
+
+private fun defaultSolicitudBaseFields(
+    deliveryZone: DeliveryZone,
+    esPedidoCompra: Boolean
+): SolicitudBaseFields {
     return SolicitudBaseFields(
         justificacion = DEFAULT_JUSTIFICACION,
         fechaNecesaria = LocalDate.now().plusDays(7).toString(),
-        idDireccionEntrega = DEFAULT_ID_DIRECCION_ENTREGA
+        idDireccionEntrega = deliveryZone.idDireccionEntrega,
+        esPedidoCompra = esPedidoCompra,
+        ubicacion = deliveryZone.ubicacionValue
     )
 }
 
@@ -248,6 +313,9 @@ fun RequestsScreen(
     val scope = rememberCoroutineScope()
     var submitAttempted by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var selectedDeliveryZone by remember { mutableStateOf(DeliveryZone.Lima) }
+    var isPurchaseRequest by remember { mutableStateOf(false) }
     var expandedItemId by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableStateOf(RequestTab.Materials) }
     val optionsByArea = remember { mutableStateMapOf<Int, List<InventoryOption>>() }
@@ -293,20 +361,54 @@ fun RequestsScreen(
         }
     }
 
-    val totalItems = materialsSection.items.size + toolsSection.items.size + eppSection.items.size
+    val allSections = listOf(materialsSection, toolsSection, eppSection)
+    val totalItems = allSections.sumOf { it.items.size }
     val activeSections = when (selectedTab) {
         RequestTab.Materials -> listOf(materialsSection)
         RequestTab.Tools -> listOf(toolsSection)
         RequestTab.Epp -> listOf(eppSection)
     }
-    val allItems = listOf(materialsSection, toolsSection, eppSection).flatMap { it.items }
+    val allItems = allSections.flatMap { it.items }
     val canSubmit = totalItems > 0 && allItems.all {
         it.quantity.toIntOrNull()?.let { value -> value > 0 } == true &&
             it.selectedInventoryId != null &&
             it.description.isNotBlank() &&
             (!it.requiresPreviousProductPhoto || it.hasAttachedPhoto())
     }
+    val confirmationSections = buildRequestConfirmationSections(allSections)
     val currentAreaError = optionsErrorByArea[selectedTab.areaId]
+    val submitConfirmedRequest: () -> Unit = {
+        scope.launch {
+            if (isSubmitting) return@launch
+            isSubmitting = true
+            showConfirmDialog = false
+            val tokenProvider = { SessionManager.token }
+            val api = RetrofitClient.apiWithToken(tokenProvider)
+            val baseFields = defaultSolicitudBaseFields(
+                deliveryZone = selectedDeliveryZone,
+                esPedidoCompra = isPurchaseRequest
+            )
+            val result = withContext(Dispatchers.IO) {
+                submitCompleteRequest(
+                    api = api,
+                    sections = allSections,
+                    baseFields = baseFields,
+                    context = context
+                )
+            }
+            isSubmitting = false
+            if (result.success) {
+                materialsSection.items.clear()
+                toolsSection.items.clear()
+                eppSection.items.clear()
+                expandedItemId = null
+                submitAttempted = false
+                onRegisterSuccess()
+            } else {
+                snackbarHostState.showSnackbar(result.message)
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -331,36 +433,35 @@ fun RequestsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Column(
+                    val requestTabs = remember {
+                        listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
+                    }
+                    val selectedTabIndex = requestTabs.indexOf(selectedTab).coerceAtLeast(0)
+                    TabRow(
+                        selectedTabIndex = selectedTabIndex,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                            .padding(horizontal = 4.dp),
+                        containerColor = Color.White,
+                        divider = {
+                            HorizontalDivider(color = BrandBorder)
+                        }
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            SegmentedTab(
-                                label = RequestTab.Materials.label,
-                                accent = RequestTab.Materials.accent,
-                                selected = selectedTab == RequestTab.Materials,
-                                onClick = { selectedTab = RequestTab.Materials },
-                                modifier = Modifier.weight(1f)
-                            )
-                            SegmentedTab(
-                                label = RequestTab.Tools.label,
-                                accent = RequestTab.Tools.accent,
-                                selected = selectedTab == RequestTab.Tools,
-                                onClick = { selectedTab = RequestTab.Tools },
-                                modifier = Modifier.weight(1f)
-                            )
-                            SegmentedTab(
-                                label = RequestTab.Epp.label,
-                                accent = RequestTab.Epp.accent,
-                                selected = selectedTab == RequestTab.Epp,
-                                onClick = { selectedTab = RequestTab.Epp },
-                                modifier = Modifier.weight(1f)
+                        requestTabs.forEach { tab ->
+                            Tab(
+                                selected = selectedTab == tab,
+                                onClick = { selectedTab = tab },
+                                selectedContentColor = tab.accent,
+                                unselectedContentColor = BrandMuted,
+                                text = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             )
                         }
                     }
@@ -451,35 +552,12 @@ fun RequestsScreen(
                             },
                             onSubmit = {
                                 submitAttempted = true
-                                scope.launch {
-                                    if (!canSubmit) {
+                                if (!canSubmit) {
+                                    scope.launch {
                                         snackbarHostState.showSnackbar("Completa los campos requeridos")
-                                        return@launch
                                     }
-
-                                    if (isSubmitting) return@launch
-                                    isSubmitting = true
-                                    val tokenProvider = { SessionManager.token }
-                                    val api = RetrofitClient.apiWithToken(tokenProvider)
-                                    val result = withContext(Dispatchers.IO) {
-                                        submitCompleteRequest(
-                                            api = api,
-                                            sections = listOf(materialsSection, toolsSection, eppSection),
-                                            baseFields = defaultSolicitudBaseFields(),
-                                            context = context
-                                        )
-                                    }
-                                    isSubmitting = false
-                                    if (result.success) {
-                                        materialsSection.items.clear()
-                                        toolsSection.items.clear()
-                                        eppSection.items.clear()
-                                        expandedItemId = null
-                                        submitAttempted = false
-                                        onRegisterSuccess()
-                                    } else {
-                                        snackbarHostState.showSnackbar(result.message)
-                                    }
+                                } else {
+                                    showConfirmDialog = true
                                 }
                             },
                             enabledSubmit = totalItems > 0 && !isSubmitting,
@@ -492,57 +570,19 @@ fun RequestsScreen(
             if (isSubmitting) {
                 RegistrationLoadingOverlay()
             }
-        }
-    }
-}
 
-@Composable
-private fun SegmentedTab(
-    label: String,
-    accent: Color,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.12f) else Color.White,
-        label = "tabBackground"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.26f) else BrandBorder,
-        label = "tabBorder"
-    )
-    val titleColor by animateColorAsState(
-        targetValue = if (selected) accent else BrandText,
-        label = "tabTitle"
-    )
-
-    Surface(
-        modifier = modifier
-            .heightIn(min = 42.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(999.dp),
-        color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor),
-        shadowElevation = 0.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = label,
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelLarge,
-                color = titleColor,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (showConfirmDialog) {
+                RequestConfirmationDialog(
+                    sections = confirmationSections,
+                    totalItems = totalItems,
+                    selectedDeliveryZone = selectedDeliveryZone,
+                    onDeliveryZoneChange = { selectedDeliveryZone = it },
+                    isPurchaseRequest = isPurchaseRequest,
+                    onPurchaseRequestChange = { isPurchaseRequest = it },
+                    onDismiss = { showConfirmDialog = false },
+                    onConfirm = submitConfirmedRequest
+                )
+            }
         }
     }
 }
@@ -585,6 +625,147 @@ private fun RegistrationLoadingOverlay() {
             }
         }
     }
+}
+
+@Composable
+private fun RequestConfirmationDialog(
+    sections: List<RequestConfirmationSection>,
+    totalItems: Int,
+    selectedDeliveryZone: DeliveryZone,
+    onDeliveryZoneChange: (DeliveryZone) -> Unit,
+    isPurchaseRequest: Boolean,
+    onPurchaseRequestChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Confirmar solicitud",
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Revisa el detalle antes de registrar ($totalItems item${if (totalItems == 1) "" else "s"}).",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BodyColor
+                )
+                Text(
+                    text = "Datos del pedido",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = TitleColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Entrega",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BodyColor
+                )
+                TabRow(
+                    selectedTabIndex = if (selectedDeliveryZone == DeliveryZone.Lima) 0 else 1,
+                    containerColor = Color.White,
+                    divider = { HorizontalDivider(color = BrandBorder) }
+                ) {
+                    Tab(
+                        selected = selectedDeliveryZone == DeliveryZone.Lima,
+                        onClick = { onDeliveryZoneChange(DeliveryZone.Lima) },
+                        selectedContentColor = AccentColor,
+                        unselectedContentColor = BrandMuted,
+                        text = { Text(DeliveryZone.Lima.label) }
+                    )
+                    Tab(
+                        selected = selectedDeliveryZone == DeliveryZone.Provincia,
+                        onClick = { onDeliveryZoneChange(DeliveryZone.Provincia) },
+                        selectedContentColor = AccentColor,
+                        unselectedContentColor = BrandMuted,
+                        text = { Text(DeliveryZone.Provincia.label) }
+                    )
+                }
+
+                Text(
+                    text = "Solicitud de compra",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BodyColor
+                )
+                TabRow(
+                    selectedTabIndex = if (isPurchaseRequest) 1 else 0,
+                    containerColor = Color.White,
+                    divider = { HorizontalDivider(color = BrandBorder) }
+                ) {
+                    Tab(
+                        selected = !isPurchaseRequest,
+                        onClick = { onPurchaseRequestChange(false) },
+                        selectedContentColor = AccentColor,
+                        unselectedContentColor = BrandMuted,
+                        text = { Text("No") }
+                    )
+                    Tab(
+                        selected = isPurchaseRequest,
+                        onClick = { onPurchaseRequestChange(true) },
+                        selectedContentColor = AccentColor,
+                        unselectedContentColor = BrandMuted,
+                        text = { Text("Si") }
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    sections.forEachIndexed { sectionIndex, section ->
+                        Text(
+                            text = section.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = TitleColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        section.items.forEachIndexed { itemIndex, item ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "${itemIndex + 1}. ${item.description} x ${item.quantity}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TitleColor
+                                )
+                                item.observations?.let {
+                                    Text(
+                                        text = "Obs: $it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BodyColor
+                                    )
+                                }
+                                item.photoStatus?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BodyColor
+                                    )
+                                }
+                            }
+                        }
+                        if (sectionIndex < sections.lastIndex) {
+                            HorizontalDivider(color = HeaderBorder)
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Volver")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Confirmar y registrar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -726,7 +907,8 @@ private suspend fun submitCompleteRequest(
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("id_usuario_solicitante", HARDCODED_SOLICITANTE_USER_ID.toString())
-            .addFormDataPart("es_pedido_compra", "0")
+            .addFormDataPart("es_pedido_compra", if (baseFields.esPedidoCompra) "1" else "0")
+            .addFormDataPart("ubicacion", baseFields.ubicacion)
             .addFormDataPart("justificacion", baseFields.justificacion)
             .addFormDataPart("fecha_necesaria", baseFields.fechaNecesaria)
             .addFormDataPart("id_direccion_entrega", baseFields.idDireccionEntrega)
@@ -863,7 +1045,7 @@ private fun logSolicitudPayload(
     Log.d(SOLICITUD_LOG_TAG, "POST /api/solicitudes/registrar-completa")
     Log.d(
         SOLICITUD_LOG_TAG,
-        "base id_usuario_solicitante=$HARDCODED_SOLICITANTE_USER_ID es_pedido_compra=0 justificacion='${baseFields.justificacion}' fecha_necesaria='${baseFields.fechaNecesaria}' id_direccion_entrega='${baseFields.idDireccionEntrega}'"
+        "base id_usuario_solicitante=$HARDCODED_SOLICITANTE_USER_ID es_pedido_compra=${if (baseFields.esPedidoCompra) 1 else 0} ubicacion='${baseFields.ubicacion}' justificacion='${baseFields.justificacion}' fecha_necesaria='${baseFields.fechaNecesaria}' id_direccion_entrega='${baseFields.idDireccionEntrega}'"
     )
     multipartParts.forEachIndexed { idx, part ->
         Log.d(SOLICITUD_LOG_TAG, "part[$idx] ${describeMultipartPart(part)}")
@@ -984,6 +1166,16 @@ private fun MaterialItemCard(
             }
         }
 
+        DescriptionDropdownField(
+            value = item.description,
+            options = options,
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            onValueSelected = onDescriptionChange,
+            isError = descriptionError != null,
+            supportingText = descriptionError
+        )
+
         OutlinedTextField(
             value = item.quantity,
             onValueChange = { value ->
@@ -1006,16 +1198,6 @@ private fun MaterialItemCard(
             keyboardActions = KeyboardActions(
                 onNext = { focusManager.clearFocus() }
             )
-        )
-
-        DescriptionDropdownField(
-            value = item.description,
-            options = options,
-            expanded = expanded,
-            onExpandedChange = onExpandedChange,
-            onValueSelected = onDescriptionChange,
-            isError = descriptionError != null,
-            supportingText = descriptionError
         )
 
         OutlinedTextField(
