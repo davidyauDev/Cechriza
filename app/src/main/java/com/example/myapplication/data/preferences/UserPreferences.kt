@@ -21,6 +21,7 @@ class UserPreferences(private val context: Context) {
         val USER_NAME_KEY = stringPreferencesKey("USER_NAME")
         val USER_TOKEN_KEY = stringPreferencesKey("USER_TOKEN")
         val USER_ID_KEY = intPreferencesKey("USER_ID")
+        val USER_STAFF_ID_KEY = intPreferencesKey("USER_STAFF_ID")
         val USER_EMAIL_KEY = stringPreferencesKey("USER_EMAIL")
         val USER_EMP_CODE_KEY = stringPreferencesKey("USER_EMP_CODE")
 
@@ -71,17 +72,32 @@ class UserPreferences(private val context: Context) {
             }
         }
 
+    val userStaffId: Flow<Int> = context.dataStore.data
+        .map { preferences -> preferences[USER_STAFF_ID_KEY] ?: 0 }
+
     val userEmail: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[USER_EMAIL_KEY] ?: "" }
 
     val userEmpCode: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[USER_EMP_CODE_KEY] ?: "" }
 
-    suspend fun saveUser(name: String, token: String, id: Int, email: String, empCode: String? = null) {
+    suspend fun saveUser(
+        name: String,
+        token: String,
+        id: Int,
+        email: String,
+        empCode: String? = null,
+        staffId: Int? = null
+    ) {
         context.dataStore.edit { preferences ->
             preferences[USER_NAME_KEY] = name
             preferences[USER_TOKEN_KEY] = token
             preferences[USER_ID_KEY] = id
+            if (staffId != null) {
+                preferences[USER_STAFF_ID_KEY] = staffId
+            } else {
+                preferences.remove(USER_STAFF_ID_KEY)
+            }
             preferences[USER_EMAIL_KEY] = email
             if (empCode != null) preferences[USER_EMP_CODE_KEY] = empCode
         }

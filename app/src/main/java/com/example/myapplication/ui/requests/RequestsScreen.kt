@@ -105,7 +105,6 @@ import java.util.UUID
 
 private const val MAX_DROPDOWN_OPTIONS = 80
 private const val SOLICITUD_LOG_TAG = "SolicitudCompleta"
-private const val HARDCODED_SOLICITANTE_USER_ID = 14
 private const val DEFAULT_JUSTIFICACION = "Pedido interno"
 private const val DEFAULT_ID_DIRECCION_ENTREGA_LIMA = "5"
 private const val DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA = "6"
@@ -382,6 +381,12 @@ fun RequestsScreen(
             if (isSubmitting) return@launch
             isSubmitting = true
             showConfirmDialog = false
+            val solicitanteUserId = SessionManager.staffId ?: SessionManager.userId
+            if (solicitanteUserId == null || solicitanteUserId <= 0) {
+                isSubmitting = false
+                snackbarHostState.showSnackbar("No se encontro staff_id de sesion. Vuelve a iniciar sesion.")
+                return@launch
+            }
             val tokenProvider = { SessionManager.token }
             val api = RetrofitClient.apiWithToken(tokenProvider)
             val baseFields = defaultSolicitudBaseFields(
@@ -393,6 +398,7 @@ fun RequestsScreen(
                     api = api,
                     sections = allSections,
                     baseFields = baseFields,
+                    solicitanteUserId = solicitanteUserId,
                     context = context
                 )
             }
@@ -882,6 +888,7 @@ private suspend fun submitCompleteRequest(
     api: com.example.myapplication.data.remote.network.ApiService,
     sections: List<RequestSectionState>,
     baseFields: SolicitudBaseFields,
+    solicitanteUserId: Int,
     context: android.content.Context
 ): SubmitRequestResult {
     val multipartParts = mutableListOf<MultipartBody.Part>()
@@ -906,7 +913,7 @@ private suspend fun submitCompleteRequest(
     return try {
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
-            .addFormDataPart("id_usuario_solicitante", HARDCODED_SOLICITANTE_USER_ID.toString())
+            .addFormDataPart("id_usuario_solicitante", solicitanteUserId.toString())
             .addFormDataPart("es_pedido_compra", if (baseFields.esPedidoCompra) "1" else "0")
             .addFormDataPart("ubicacion", baseFields.ubicacion)
             .addFormDataPart("justificacion", baseFields.justificacion)
@@ -914,7 +921,11 @@ private suspend fun submitCompleteRequest(
             .addFormDataPart("id_direccion_entrega", baseFields.idDireccionEntrega)
 
         multipartParts.forEach { requestBody.addPart(it) }
-        logSolicitudPayload(baseFields = baseFields, multipartParts = multipartParts)
+        logSolicitudPayload(
+            solicitanteUserId = solicitanteUserId,
+            baseFields = baseFields,
+            multipartParts = multipartParts
+        )
 
         val response = api.registrarSolicitudCompleta(
             multipartBody = requestBody.build()
@@ -1039,13 +1050,14 @@ private fun extractBackendMessage(raw: String?): String? {
 }
 
 private fun logSolicitudPayload(
+    solicitanteUserId: Int,
     baseFields: SolicitudBaseFields,
     multipartParts: List<MultipartBody.Part>
 ) {
     Log.d(SOLICITUD_LOG_TAG, "POST /api/solicitudes/registrar-completa")
     Log.d(
         SOLICITUD_LOG_TAG,
-        "base id_usuario_solicitante=$HARDCODED_SOLICITANTE_USER_ID es_pedido_compra=${if (baseFields.esPedidoCompra) 1 else 0} ubicacion='${baseFields.ubicacion}' justificacion='${baseFields.justificacion}' fecha_necesaria='${baseFields.fechaNecesaria}' id_direccion_entrega='${baseFields.idDireccionEntrega}'"
+        "base id_usuario_solicitante=$solicitanteUserId es_pedido_compra=${if (baseFields.esPedidoCompra) 1 else 0} ubicacion='${baseFields.ubicacion}' justificacion='${baseFields.justificacion}' fecha_necesaria='${baseFields.fechaNecesaria}' id_direccion_entrega='${baseFields.idDireccionEntrega}'"
     )
     multipartParts.forEachIndexed { idx, part ->
         Log.d(SOLICITUD_LOG_TAG, "part[$idx] ${describeMultipartPart(part)}")

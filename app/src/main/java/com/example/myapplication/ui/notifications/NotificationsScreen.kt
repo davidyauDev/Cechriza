@@ -73,6 +73,37 @@ private enum class RequestStatus(val label: String, val color: Color) {
     Reviewed("Revisada", BrandMuted)
 }
 
+private data class StatusChipStyle(
+    val background: Color,
+    val border: Color,
+    val foreground: Color
+)
+
+private fun statusChipStyle(status: RequestStatus): StatusChipStyle {
+    return when (status) {
+        RequestStatus.Pending -> StatusChipStyle(
+            background = Color(0xFFFFF7E8),
+            border = Color(0xFFF9D58A),
+            foreground = Color(0xFF9A6700)
+        )
+        RequestStatus.Approved -> StatusChipStyle(
+            background = Color(0xFFECFDF3),
+            border = Color(0xFFABEFC6),
+            foreground = Color(0xFF067647)
+        )
+        RequestStatus.Rejected -> StatusChipStyle(
+            background = Color(0xFFFEF3F2),
+            border = Color(0xFFFDA29B),
+            foreground = Color(0xFFB42318)
+        )
+        RequestStatus.Reviewed -> StatusChipStyle(
+            background = Color(0xFFF4F6FA),
+            border = Color(0xFFD0D5DD),
+            foreground = Color(0xFF344054)
+        )
+    }
+}
+
 private data class RequestItemLine(
     val id: String,
     val product: String,
@@ -101,7 +132,22 @@ private data class RequestEntry(
     val items: List<RequestItemLine>
 )
 
-private const val HARDCODED_SOLICITANTE_USER_ID = 14
+private fun extractTipoSolicitud(obj: JsonObject?): String? {
+    if (obj == null) return null
+    val tipoSolicitud = obj.get("tipo_solicitud") ?: return null
+    if (tipoSolicitud.isJsonNull) return null
+
+    return when {
+        tipoSolicitud.isJsonPrimitive -> tipoSolicitud.asNonBlankStringOrNull()
+        tipoSolicitud.isJsonObject -> {
+            val typeObject = tipoSolicitud.asJsonObject
+            typeObject.get("descripcion").asNonBlankStringOrNull()
+                ?: typeObject.get("nombre").asNonBlankStringOrNull()
+                ?: typeObject.get("tipo").asNonBlankStringOrNull()
+        }
+        else -> null
+    }
+}
 
 private fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
     val dataArray = root
@@ -124,6 +170,7 @@ private fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
         val requester = obj.get("solicitante").asNonBlankStringOrNull()
             ?: buildStaffName(obj.getObjectOrNull("staff"))
             ?: "Solicitante"
+        val tipoSolicitud = extractTipoSolicitud(obj) ?: "Solicitud"
 
         RequestEntry(
             solicitudId = idSolicitud,
@@ -131,7 +178,7 @@ private fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             requester = requester,
             email = "--",
             title = "Solicitud #$idSolicitud",
-            category = "Solicitud",
+            category = tipoSolicitud,
             time = obj.get("fecha_registro").asNonBlankStringOrNull() ?: "--",
             justification = obj.get("justificacion").asNonBlankStringOrNull() ?: "--",
             status = status,
@@ -218,6 +265,7 @@ private fun parseRequestDetailEntry(root: JsonElement?, fallback: RequestEntry):
     val statusDescription = solicitudObj?.get("estado").asNonBlankStringOrNull()
         ?: fallback.statusDescription
     val status = resolveRequestStatus(statusDescription)
+    val tipoSolicitud = extractTipoSolicitud(solicitudObj) ?: fallback.category
 
     val items = detallesArray
         ?.mapNotNull { detailElement ->
@@ -251,7 +299,7 @@ private fun parseRequestDetailEntry(root: JsonElement?, fallback: RequestEntry):
         requester = requester,
         email = email,
         title = "Solicitud #$solicitudId",
-        category = "Solicitud",
+        category = tipoSolicitud,
         time = solicitudObj?.get("fecha_registro").asNonBlankStringOrNull() ?: fallback.time,
         justification = solicitudObj?.get("justificacion").asNonBlankStringOrNull() ?: fallback.justification,
         status = status,
@@ -319,11 +367,17 @@ fun NotificationsScreen(
     LaunchedEffect(Unit) {
         isLoading = true
         errorMessage = null
+        val solicitanteUserId = SessionManager.staffId ?: SessionManager.userId
+        if (solicitanteUserId == null || solicitanteUserId <= 0) {
+            isLoading = false
+            errorMessage = "No se encontro staff_id de sesion. Vuelve a iniciar sesion."
+            return@LaunchedEffect
+        }
         try {
             val tokenProvider = { SessionManager.token }
             val api = RetrofitClient.apiWithToken(tokenProvider)
             val response = withContext(Dispatchers.IO) {
-                api.getSolicitudes(HARDCODED_SOLICITANTE_USER_ID)
+                api.getSolicitudes(solicitanteUserId)
             }
 
             if (response.isSuccessful) {
@@ -703,18 +757,12 @@ private fun RequestListCard(
                     color = BrandMuted
                 )
                 Text(
-                    text = entry.category,
+                    text = "Tipo: ${entry.category}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = BrandMuted,
+                    color = BrandBlueDark,
                     fontWeight = FontWeight.SemiBold
                 )
             }
-
-            Text(
-                text = "${entry.items.size} items",
-                style = MaterialTheme.typography.bodySmall,
-                color = BrandMuted
-            )
 
             androidx.compose.material3.Button(
                 onClick = onClick,
@@ -822,28 +870,6 @@ private fun RequestDetailPanel(
                             style = MaterialTheme.typography.titleSmall,
                             color = BrandText,
                             fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            item {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = BrandSurface,
-                    border = BorderStroke(1.dp, BrandBorder)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "Justificacion",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandMuted,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = entry.justification,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = BrandText
                         )
                     }
                 }
@@ -980,10 +1006,11 @@ private fun SmallMetric(
 
 @Composable
 private fun StatusChip(status: RequestStatus, labelOverride: String? = null) {
+    val style = statusChipStyle(status)
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = status.color.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, status.color.copy(alpha = 0.20f))
+        color = style.background,
+        border = BorderStroke(1.dp, style.border)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -997,13 +1024,13 @@ private fun StatusChip(status: RequestStatus, labelOverride: String? = null) {
                     RequestStatus.Reviewed -> Icons.Default.Info
                 },
                 contentDescription = null,
-                tint = status.color
+                tint = style.foreground
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = labelOverride?.takeIf { it.isNotBlank() } ?: status.label,
                 style = MaterialTheme.typography.labelSmall,
-                color = status.color,
+                color = style.foreground,
                 fontWeight = FontWeight.SemiBold
             )
         }

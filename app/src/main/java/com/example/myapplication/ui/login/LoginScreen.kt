@@ -103,6 +103,7 @@ fun LoginScreen(
             SessionManager.setSession(
                 context = context,
                 userId = state.user.id,
+                staffId = state.user.staffId,
                 token = state.token,
                 name = state.user.name,
                 email = state.user.email,

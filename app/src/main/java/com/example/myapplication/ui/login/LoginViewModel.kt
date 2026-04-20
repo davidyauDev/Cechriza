@@ -31,6 +31,7 @@ class LoginViewModel(private val repository: AuthRepository) : ViewModel() {
 
                 val user = UserData(
                     id = userResponse.id,
+                    staffId = userResponse.staff_id,
                     name = userResponse.name,
                     email = userResponse.email,
                     roles = listOf(userResponse.role),
@@ -40,7 +41,7 @@ class LoginViewModel(private val repository: AuthRepository) : ViewModel() {
                 val token = data.access_token
                 android.util.Log.d(
                     "LOGIN",
-                    "Login success: userId=${userResponse.id}, emp_code=${userResponse.emp_code}"
+                    "Login success: userId=${userResponse.id}, staff_id=${userResponse.staff_id}, emp_code=${userResponse.emp_code}"
                 )
                 _loginState.value = LoginState.Success(user, token)
             }.onFailure { e ->

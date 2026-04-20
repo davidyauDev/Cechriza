@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 object SessionManager {
 
     @Volatile var userId: Int? = null
+    @Volatile var staffId: Int? = null
     @Volatile var token: String? = null
     @Volatile var userName: String? = null
     @Volatile var userEmail: String? = null
@@ -25,6 +26,7 @@ object SessionManager {
         CoroutineScope(Dispatchers.IO).launch {
             token = prefs.userToken.first()
             userId = prefs.userId.first()
+            staffId = prefs.userStaffId.first().takeIf { it > 0 }
             userName = prefs.userName.first()
             userEmail = prefs.userEmail.first()
             empCode = prefs.userEmpCode.first()
@@ -37,12 +39,14 @@ object SessionManager {
     fun setSession(
         context: Context,
         userId: Int,
+        staffId: Int? = null,
         token: String,
         name: String,
         email: String,
         empCode: String? = null
     ) {
         this.userId = userId
+        this.staffId = staffId
         this.token = token
         this.userName = name
         this.userEmail = email
@@ -56,7 +60,8 @@ object SessionManager {
                 token = token,
                 id = userId,
                 email = email,
-                empCode = empCode
+                empCode = empCode,
+                staffId = staffId
             )
         }
     }
@@ -66,6 +71,7 @@ object SessionManager {
      */
     fun clear(context: Context) {
         this.userId = null
+        this.staffId = null
         this.token = null
         this.userName = null
         this.userEmail = null

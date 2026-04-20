@@ -13,6 +13,7 @@ data class LoginResponseData(
 
 data class UserResponse(
     val id: Int,
+    val staff_id: Int? = null,
     val name: String,
     val email: String,
     val emp_code: String,
