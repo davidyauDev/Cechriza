@@ -5,16 +5,23 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,10 +30,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val HeaderBackground = BrandBlue
 private val HeaderTitleColor = Color.White
@@ -96,12 +105,13 @@ fun AppHeader(
 
             HeaderActionSlot(
                 visible = showNotificationButton,
-                onClick = onNotificationClick,
+                onClick = {},
                 icon = Icons.Default.Notifications,
                 contentDescription = "Notificaciones",
                 tint = HeaderNotificationTint,
                 backgroundColor = HeaderNotificationBackground,
-                borderColor = HeaderNotificationBorder
+                borderColor = HeaderNotificationBorder,
+                isNotification = true
             )
         }
     }
@@ -115,29 +125,79 @@ private fun HeaderActionSlot(
     contentDescription: String,
     tint: Color,
     backgroundColor: Color,
-    borderColor: Color
+    borderColor: Color,
+    isNotification: Boolean = false
 ) {
     if (!visible) {
         Box(modifier = Modifier.size(40.dp))
         return
     }
 
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp),
-        shape = CircleShape,
-        color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor)
+    val bellPulse = if (isNotification) {
+        rememberInfiniteTransition(label = "bell_pulse").animateFloat(
+            initialValue = 1f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "bell_pulse_value"
+        ).value
+    } else {
+        1f
+    }
+
+    Box(
+        modifier = Modifier.size(if (isNotification) 46.dp else 40.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .size(40.dp)
+                .graphicsLayer {
+                    scaleX = bellPulse
+                    scaleY = bellPulse
+                },
+            shape = CircleShape,
+            color = backgroundColor,
+            border = BorderStroke(1.dp, borderColor)
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = tint
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = tint
+                )
+            }
+        }
+
+        if (isNotification) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 1.dp, y = (-1).dp),
+                shape = CircleShape,
+                color = Color(0xFFE53935),
+                border = BorderStroke(1.5.dp, Color.White)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .sizeIn(minWidth = 16.dp, minHeight = 16.dp)
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "2",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
@@ -192,12 +252,13 @@ fun BlueHeaderWithName(
 
             HeaderActionSlot(
                 visible = showNotificationButton,
-                onClick = onNotificationClick,
+                onClick = {},
                 icon = Icons.Default.Notifications,
                 contentDescription = "Notificaciones",
                 tint = HeaderNotificationTint,
                 backgroundColor = HeaderNotificationBackground,
-                borderColor = HeaderNotificationBorder
+                borderColor = HeaderNotificationBorder,
+                isNotification = true
             )
         }
     }

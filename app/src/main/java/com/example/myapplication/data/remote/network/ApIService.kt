@@ -5,6 +5,7 @@ import com.example.myapplication.data.remote.dto.response.AttendanceResponse
 import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
 import com.example.myapplication.data.remote.dto.response.LoginResponseTotal
 import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -45,7 +46,8 @@ interface ApiService {
     // Endpoint para obtener rutas del día (devuelve Json flexible)
     @GET("technicians/rutas-dia")
     suspend fun getRutasDia(
-        @Query("emp_code") empCode: String
+        @Query("emp_code") empCode: String,
+        @Query("fecha") fecha: String? = null
     ): Response<JsonElement>
 
     // Nuevo endpoint: eventos hoy
@@ -62,6 +64,16 @@ interface ApiService {
         @Query("id_usuario_solicitante") userId: Int
     ): Response<JsonElement>
 
+    @GET("solicitudes-gasto/comprobantes")
+    suspend fun getSolicitudesGastoComprobantes(
+        @Query("staff_id") staffId: Int
+    ): Response<JsonElement>
+
+    @GET("rrhh/solicitudes-compra")
+    suspend fun getRrhhSolicitudesCompra(
+        @Query("staff_id") staffId: Int
+    ): Response<JsonElement>
+
     @GET("solicitudes/{id}")
     suspend fun getSolicitudById(
         @Path("id") solicitudId: Int
@@ -70,5 +82,10 @@ interface ApiService {
     @POST("solicitudes/registrar-completa")
     suspend fun registrarSolicitudCompleta(
         @Body multipartBody: MultipartBody
+    ): Response<JsonElement>
+
+    @POST("solicitudes-gasto")
+    suspend fun registrarSolicitudGasto(
+        @Body body: JsonObject
     ): Response<JsonElement>
 }

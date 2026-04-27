@@ -24,6 +24,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -35,6 +38,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +75,54 @@ private enum class RequestStatus(val label: String, val color: Color) {
     Approved("Aprobada", BrandBlue),
     Rejected("Rechazada", BrandBlueDark),
     Reviewed("Revisada", BrandMuted)
+}
+
+private enum class HistoryMode(val label: String) {
+    Historial("ALMACEN"),
+    Comprobantes("GASTOS")
+}
+
+private enum class ComprobanteSource(val label: String) {
+    Gastos("Otros"),
+    Rrhh("EPPs")
+}
+
+private data class ComprobanteEntry(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val status: String,
+    val date: String,
+    val amount: String?,
+    val areaId: Int?,
+    val details: List<ComprobanteDetailItem>
+)
+
+private data class ComprobanteDetailItem(
+    val id: String,
+    val producto: String,
+    val cantidad: Int,
+    val descripcion: String,
+    val rutaImagen: String,
+    val urlImagen: String
+)
+
+private enum class RequestStartOption(
+    val label: String,
+    val description: String
+) {
+    Epps(
+        "Solicitud EPPs",
+        "Para solicitar solo botas de seguridad."
+    ),
+    Almacen(
+        "Solicitud Almacen",
+        "Para materiales o stock del almacen de la empresa."
+    ),
+    Gasto(
+        "Solicitud de Gasto",
+        "Cuando compras con tu dinero y luego la empresa te hace el reembolso."
+    )
 }
 
 private data class StatusChipStyle(
@@ -243,6 +295,70 @@ private fun JsonObject.getObjectOrNull(key: String): JsonObject? {
     return if (value.isJsonObject) value.asJsonObject else null
 }
 
+private fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry> {
+    val dataArray = root
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject
+        ?.getAsJsonArray("data")
+        ?: return emptyList()
+
+    return dataArray.mapIndexedNotNull { index, item ->
+        if (!item.isJsonObject) return@mapIndexedNotNull null
+        val obj = item.asJsonObject
+        val solicitud = obj.getObjectOrNull("solicitud_gasto")
+
+        val id = solicitud?.get("id").asIntOrNull()
+            ?: obj.get("solicitud_gasto_id").asIntOrNull()
+            ?: obj.get("id").asIntOrNull()
+            ?: (index + 1)
+
+        val motivo = solicitud?.get("motivo").asNonBlankStringOrNull() ?: "Solicitud"
+        val solicitante = solicitud?.get("solicitante").asNonBlankStringOrNull().orEmpty()
+        val area = solicitud?.get("area").asNonBlankStringOrNull().orEmpty()
+        val workflow = obj.get("workflow_state").asNonBlankStringOrNull().orEmpty()
+        val subtitle = listOf(solicitante, area, workflow).filter { it.isNotBlank() }.joinToString(" - ")
+        val status = obj.get("workflow_state").asNonBlankStringOrNull()
+            ?: solicitud?.get("estado").asNonBlankStringOrNull()
+            ?: "pendiente"
+        val date = solicitud?.get("fecha_solicitud").asNonBlankStringOrNull()
+            ?: obj.get("fecha_registro").asNonBlankStringOrNull()
+            ?: "--"
+
+        val monto = obj.get("monto_real").asNonBlankStringOrNull()
+            ?: obj.get("monto_estimado").asNonBlankStringOrNull()
+            ?: solicitud?.get("monto_real").asNonBlankStringOrNull()
+            ?: solicitud?.get("monto_estimado").asNonBlankStringOrNull()
+        val areaId = solicitud?.get("id_area").asIntOrNull()
+            ?: obj.get("id_area").asIntOrNull()
+        val detailArray = obj.getAsJsonArray("solicitud_gasto_detalles")
+        val details = detailArray?.mapIndexedNotNull { detailIndex, detailElement ->
+            if (!detailElement.isJsonObject) return@mapIndexedNotNull null
+            val detail = detailElement.asJsonObject
+            val detailId = detail.get("id").asIntOrNull() ?: (detailIndex + 1)
+            ComprobanteDetailItem(
+                id = "#$detailId",
+                producto = detail.get("producto").asNonBlankStringOrNull()
+                    ?: "Producto ${detail.get("id_producto").asIntOrZero()}",
+                cantidad = detail.get("cantidad").asIntOrZero(),
+                descripcion = detail.get("descripcion_adicional").asNonBlankStringOrNull() ?: "--",
+                rutaImagen = detail.get("ruta_imagen").asNonBlankStringOrNull() ?: "--",
+                urlImagen = detail.get("url_imagen").asNonBlankStringOrNull() ?: "--"
+            )
+        }.orEmpty()
+
+        ComprobanteEntry(
+            id = "#$id",
+            title = motivo,
+            subtitle = subtitle,
+            status = status,
+            date = date,
+            amount = monto?.let { "S/ $it" },
+            areaId = areaId,
+            details = details
+        )
+    }
+}
+
 private fun parseRequestDetailEntry(root: JsonElement?, fallback: RequestEntry): RequestEntry? {
     val data = root
         ?.takeIf { it.isJsonObject }
@@ -308,20 +424,222 @@ private fun parseRequestDetailEntry(root: JsonElement?, fallback: RequestEntry):
     )
 }
 
+@Composable
+private fun ComprobanteListCard(
+    entry: ComprobanteEntry,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(22.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = entry.id,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = entry.status,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BrandBlueDark,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = BrandText,
+                fontWeight = FontWeight.Medium
+            )
+
+            if (entry.subtitle.isNotBlank()) {
+                Text(
+                    text = entry.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+
+            Text(
+                text = entry.date,
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted
+            )
+
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .height(38.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Ver detalle")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComprobanteDetailPanel(
+    entry: ComprobanteEntry,
+    onClose: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder)
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 560.dp),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text(
+                    text = "Detalle de gasto ${entry.id}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = BrandText,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            item {
+                Text(
+                    text = entry.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            item {
+                Text(
+                    text = "${entry.subtitle.ifBlank { "Sin subtitulo" }}\nFecha: ${entry.date}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+            item {
+                Text(
+                    text = "Items",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (entry.details.isEmpty()) {
+                item {
+                    Text(
+                        text = "Sin detalle disponible.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandMuted
+                    )
+                }
+            } else {
+                items(entry.details, key = { it.id }) { item ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = BrandSurface,
+                        border = BorderStroke(1.dp, BrandBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "${item.id} - ${item.producto}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = BrandText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Cantidad: ${item.cantidad}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                            Text(
+                                text = "Descripcion: ${item.descripcion}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                            Text(
+                                text = "Ruta: ${item.rutaImagen}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                            if (item.urlImagen != "--") {
+                                Text(
+                                    text = "URL: ${item.urlImagen}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, BrandBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandMuted)
+                ) {
+                    Text("Cerrar")
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationsScreen(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     showBackButton: Boolean = true,
-    onAddRequestClick: () -> Unit = {}
+    onAddRequestClick: (String) -> Unit = {}
 ) {
+    var mode by remember { mutableStateOf(HistoryMode.Historial) }
+    var comprobanteSource by remember { mutableStateOf(ComprobanteSource.Gastos) }
+    var comprobantes by remember { mutableStateOf<List<ComprobanteEntry>>(emptyList()) }
+    var isLoadingComprobantes by remember { mutableStateOf(false) }
+    var comprobantesError by remember { mutableStateOf<String?>(null) }
+    var reloadComprobantesTick by remember { mutableStateOf(0) }
     var requests by remember { mutableStateOf<List<RequestEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isDetailLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var detailEntry by remember { mutableStateOf<RequestEntry?>(null) }
+    var detailComprobanteEntry by remember { mutableStateOf<ComprobanteEntry?>(null) }
+    var showRequestTypeDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -395,9 +713,43 @@ fun NotificationsScreen(
         }
     }
 
-    val pendingCount = requests.count { it.status == RequestStatus.Pending }
-    val approvedCount = requests.count { it.status == RequestStatus.Approved }
-    val rejectedCount = requests.count { it.status == RequestStatus.Rejected }
+    LaunchedEffect(mode, comprobanteSource, reloadComprobantesTick) {
+        if (mode != HistoryMode.Comprobantes) return@LaunchedEffect
+
+        val staffId = SessionManager.staffId ?: SessionManager.userId
+        if (staffId == null || staffId <= 0) {
+            comprobantes = emptyList()
+            comprobantesError = "No se encontro staff_id de sesion. Vuelve a iniciar sesion."
+            isLoadingComprobantes = false
+            return@LaunchedEffect
+        }
+
+        isLoadingComprobantes = true
+        comprobantesError = null
+        try {
+            val api = RetrofitClient.apiWithToken { SessionManager.token }
+            val response = withContext(Dispatchers.IO) {
+                api.getSolicitudesGastoComprobantes(staffId)
+            }
+            if (response.isSuccessful) {
+                val parsed = withContext(Dispatchers.Default) {
+                    parseComprobantesEntries(response.body())
+                }
+                comprobantes = when (comprobanteSource) {
+                    ComprobanteSource.Rrhh -> parsed.filter { it.areaId == 11 }
+                    ComprobanteSource.Gastos -> parsed.filter { it.areaId != 11 }
+                }
+            } else {
+                comprobantes = emptyList()
+                comprobantesError = "No se pudo cargar ${comprobanteSource.label} (${response.code()})"
+            }
+        } catch (_: Exception) {
+            comprobantes = emptyList()
+            comprobantesError = "Sin conexion para consultar ${comprobanteSource.label.lowercase()}"
+        } finally {
+            isLoadingComprobantes = false
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -417,8 +769,9 @@ fun NotificationsScreen(
             )
         },
         floatingActionButton = {
+            if (mode == HistoryMode.Historial) {
             FloatingActionButton(
-                onClick = onAddRequestClick,
+                onClick = { showRequestTypeDialog = true },
                 containerColor = BrandBlue,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
@@ -427,6 +780,7 @@ fun NotificationsScreen(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Nueva solicitud"
                 )
+            }
             }
         }
     ) { padding ->
@@ -438,67 +792,162 @@ fun NotificationsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Surface(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    color = BrandBlueSoft,
-                    border = BorderStroke(1.dp, BrandBorder)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, BrandBorder)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = BrandBlue,
-                                    modifier = Modifier.padding(6.dp)
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Estados solicitud",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BrandText
-                                )
-                                Text(
-                                    text = "Resumen rapido",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
-                            }
-                            Text(
-                                text = requests.size.toString(),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = BrandBlueDark,
-                                fontWeight = FontWeight.Bold
+                    HistoryMode.values().forEach { option ->
+                        OutlinedButton(
+                            onClick = { mode = option },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                if (mode == option) BrandBlue else BrandBorder
                             )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            MetricPill("Pend.", pendingCount, BrandOrange, Modifier.weight(1f))
-                            MetricPill("Aprob.", approvedCount, BrandBlue, Modifier.weight(1f))
-                            MetricPill("Rech.", rejectedCount, BrandBlueDark, Modifier.weight(1f))
+                            Text(
+                                text = option.label,
+                                color = if (mode == option) BrandBlue else BrandMuted
+                            )
                         }
                     }
                 }
             }
 
-            when {
+            if (mode == HistoryMode.Comprobantes) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ComprobanteSource.values().forEach { source ->
+                            OutlinedButton(
+                                onClick = { comprobanteSource = source },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (comprobanteSource == source) BrandBlue else BrandBorder
+                                )
+                            ) {
+                                Text(
+                                    text = source.label,
+                                    color = if (comprobanteSource == source) BrandBlue else BrandMuted
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(onClick = { reloadComprobantesTick += 1 }) {
+                            Text("Recargar")
+                        }
+                    }
+                }
+
+                when {
+                    isLoadingComprobantes -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.width(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = BrandBlue
+                                    )
+                                    Text(
+                                        text = "Cargando ${comprobanteSource.label.lowercase()}...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BrandText
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    !comprobantesError.isNullOrBlank() -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "No se pudo cargar comprobantes",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = BrandText,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = comprobantesError.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    comprobantes.isEmpty() -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Sin comprobantes",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = BrandText,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "No hay registros para este usuario.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        items(comprobantes, key = { "${it.id}-${it.date}-${it.title}" }) { entry ->
+                            ComprobanteListCard(
+                                entry = entry,
+                                onClick = { detailComprobanteEntry = entry }
+                            )
+                        }
+                    }
+                }
+            } else when {
                 isLoading -> {
                     item {
                         Surface(
@@ -603,7 +1052,7 @@ fun NotificationsScreen(
             }
         }
 
-        detailEntry?.let { entry ->
+        detailEntry?.takeIf { mode == HistoryMode.Historial }?.let { entry ->
             ModalBottomSheet(
                 onDismissRequest = { detailEntry = null },
                 sheetState = sheetState
@@ -615,10 +1064,97 @@ fun NotificationsScreen(
             }
         }
 
+        detailComprobanteEntry?.takeIf { mode == HistoryMode.Comprobantes }?.let { entry ->
+            ModalBottomSheet(
+                onDismissRequest = { detailComprobanteEntry = null },
+                sheetState = sheetState
+            ) {
+                ComprobanteDetailPanel(
+                    entry = entry,
+                    onClose = { detailComprobanteEntry = null }
+                )
+            }
+        }
+
         if (isDetailLoading) {
             DetailLoadingSwal()
         }
+
+        if (showRequestTypeDialog) {
+            RequestTypeDialog(
+                onDismiss = { showRequestTypeDialog = false },
+                onSelect = { option ->
+                    showRequestTypeDialog = false
+                    val preset = when (option) {
+                        RequestStartOption.Epps -> "epp"
+                        RequestStartOption.Almacen -> "almacen"
+                        RequestStartOption.Gasto -> "gasto"
+                    }
+                    onAddRequestClick(preset)
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun RequestTypeDialog(
+    onDismiss: () -> Unit,
+    onSelect: (RequestStartOption) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Nueva solicitud",
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Antes de continuar, selecciona el tipo de solicitud:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BrandText
+                )
+
+                RequestStartOption.values().forEach { option ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, BrandBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(option) }
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = option.label,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = BrandText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = option.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -660,41 +1196,6 @@ private fun DetailLoadingSwal() {
                     color = BrandMuted
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun MetricPill(
-    label: String,
-    value: Int,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(999.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, color.copy(alpha = 0.18f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = BrandMuted,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                color = color,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

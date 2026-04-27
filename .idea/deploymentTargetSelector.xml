@@ -3,11 +3,11 @@
   <component name="deploymentTargetSelector">
     <selectionStates>
       <SelectionState runConfigName="Cechriza">
-        <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-04-14T19:56:46.174533900Z">
+        <option name="selectionMode" value="DIALOG" />
+        <DropdownSelection timestamp="2026-04-27T21:18:03.514940600Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=11098253C6002509" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Intel\.android\avd\Medium_Phone.avd" />
             </handle>
           </Target>
         </DropdownSelection>

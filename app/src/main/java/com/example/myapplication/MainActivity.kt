@@ -138,7 +138,7 @@ fun AppNavigation(navController: NavHostController) {
             NotificationsScreen(
                 navController = navController,
                 showBackButton = true,
-                onAddRequestClick = { navController.navigate("requests_form") }
+                onAddRequestClick = { preset -> navController.navigate("requests_form/$preset") }
             )
         }
 
@@ -151,7 +151,23 @@ fun AppNavigation(navController: NavHostController) {
                         popUpTo("requests_form") { inclusive = true }
                         launchSingleTop = true
                     }
-                }
+                },
+                initialPreset = null
+            )
+        }
+
+        composable("requests_form/{preset}") { backStackEntry ->
+            val preset = backStackEntry.arguments?.getString("preset")
+            RequestsScreen(
+                onHomeClick = { navController.popBackStack() },
+                onNotificationsClick = { navController.navigate("notifications") },
+                onRegisterSuccess = {
+                    navController.navigate("notifications") {
+                        popUpTo("requests_form") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                initialPreset = preset
             )
         }
 
@@ -225,7 +241,7 @@ fun ContentScreen(
             navController = navController,
             modifier = modifier,
             showBackButton = false,
-            onAddRequestClick = { navController.navigate("requests_form") }
+            onAddRequestClick = { preset -> navController.navigate("requests_form/$preset") }
         )
         3 -> AccountScreen(
             modifier = modifier,

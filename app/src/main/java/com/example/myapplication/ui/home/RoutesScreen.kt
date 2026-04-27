@@ -19,18 +19,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,10 +51,15 @@ import com.google.gson.JsonElement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 
 private const val TICKET_BASE_URL = "https://osticket.cechriza.com/system/formulario_ticket?id="
+
+private enum class RouteDayTab(val title: String, val dayOffset: Int) {
+    Today("Hoy", 0),
+    Tomorrow("Manana", 1)
+}
 
 data class RemoteRoute(
     val ticketId: Int?,
@@ -70,25 +76,43 @@ data class RemoteRoute(
 )
 
 @Composable
-fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier) {
+fun RoutesScreen(
+    navController: NavHostController,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
+    val dayTabs = remember { RouteDayTab.values().toList() }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var refreshTrigger by remember { mutableIntStateOf(0) }
+    val dayOffset = dayTabs[selectedTabIndex].dayOffset
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var routes by remember { mutableStateOf<List<RemoteRoute>>(emptyList()) }
     var totalRutas by remember { mutableStateOf<Int?>(null) }
 
-    val todayLabel = remember {
-        SimpleDateFormat("EEEE dd MMM yyyy", Locale("es")).format(Date())
+    val targetDate = remember(dayOffset) {
+        Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }.time
     }
+    val dayLabel = remember(targetDate) {
+        SimpleDateFormat("EEEE dd MMM yyyy", Locale("es")).format(targetDate)
+    }
+    val requestDate = remember(targetDate) {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(targetDate)
+    }
+    val headerTitle = "Rutas"
+    val loadingText = if (dayOffset == 1) "Cargando rutas de manana..." else "Cargando rutas..."
+    val emptyText = if (dayOffset == 1) "Sin rutas para manana" else "Sin rutas para mostrar"
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(dayOffset, refreshTrigger) {
         isLoading = true
         errorMessage = null
+        routes = emptyList()
+        totalRutas = null
         try {
             val empCode = SessionManager.empCode ?: ""
             val token = SessionManager.token ?: ""
             val api = RetrofitClient.apiWithToken { token }
-            val resp = withContext(Dispatchers.IO) { api.getRutasDia(empCode) }
+            val resp = withContext(Dispatchers.IO) { api.getRutasDia(empCode, requestDate) }
             if (resp.isSuccessful) {
                 val body: JsonElement? = resp.body()
                 val parsed = mutableListOf<RemoteRoute>()
@@ -150,7 +174,7 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 AppHeader(
-                    title = "Rutas del día",
+                    title = headerTitle,
                     subtitle = totalRutas?.let { "$it rutas disponibles" } ?: "Resumen de recorridos",
                     showBackButton = true,
                     onBackClick = { navController.popBackStack("main", false) },
@@ -167,12 +191,38 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Text(
-                                text = todayLabel,
+                                text = dayLabel,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BrandMuted,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+
+                            TabRow(selectedTabIndex = selectedTabIndex) {
+                                dayTabs.forEachIndexed { index, tab ->
+                                    Tab(
+                                        selected = selectedTabIndex == index,
+                                        onClick = { selectedTabIndex = index },
+                                        text = { Text(tab.title) }
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Button(
+                                    onClick = { refreshTrigger += 1 },
+                                    enabled = !isLoading,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = BrandBlue,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text(text = "Refrescar")
+                                }
+                            }
 
                             when {
                                 isLoading -> {
@@ -189,7 +239,7 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                                         ) {
                                             CircularProgressIndicator(color = BrandBlue)
                                             Text(
-                                                text = "Cargando rutas...",
+                                                text = loadingText,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = BrandText
                                             )
@@ -237,7 +287,7 @@ fun RoutesScreen(navController: NavHostController, modifier: Modifier = Modifier
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Text(
-                                                text = "Sin rutas para mostrar",
+                                                text = emptyText,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = BrandText,
                                                 fontWeight = FontWeight.SemiBold

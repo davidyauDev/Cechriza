@@ -90,6 +90,7 @@ import com.example.myapplication.ui.home.BrandMuted
 import com.example.myapplication.ui.home.AppHeader
 import com.example.myapplication.data.preferences.SessionManager
 import com.example.myapplication.data.remote.network.RetrofitClient
+import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -101,6 +102,8 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 private const val MAX_DROPDOWN_OPTIONS = 80
@@ -108,6 +111,8 @@ private const val SOLICITUD_LOG_TAG = "SolicitudCompleta"
 private const val DEFAULT_JUSTIFICACION = "Pedido interno"
 private const val DEFAULT_ID_DIRECCION_ENTREGA_LIMA = "5"
 private const val DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA = "6"
+private const val EPP_AREA_ID = 11
+private const val ALMACEN_SOLICITUD_GENERAL_AREA_ID = 1
 
 private val ScreenBackground = BrandSurface
 private val HeaderBackground = BrandBlueSoft
@@ -148,6 +153,15 @@ private data class InventoryOption(
     val label: String,
     val requiresPreviousProductPhoto: Boolean = false
 )
+
+private val eppBootOptions = listOf(
+    InventoryOption(195, EPP_AREA_ID, "BOTAS DE SEGURIDAD NEGRO TALLA 38", true),
+    InventoryOption(196, EPP_AREA_ID, "BOTAS DE SEGURIDAD NEGRO TALLA 40", true),
+    InventoryOption(197, EPP_AREA_ID, "BOTAS DE SEGURIDAD NEGRO TALLA 41", true),
+    InventoryOption(198, EPP_AREA_ID, "BOTAS DE SEGURIDAD NEGRO TALLA 42", true),
+    InventoryOption(199, EPP_AREA_ID, "BOTAS DE SEGURIDAD NEGRO TALLA 43", true)
+)
+private val hiddenEppBootIdsForAlmacen = setOf(195, 196, 197, 198, 199)
 
 private fun defaultOptions(vararg labels: String): List<InventoryOption> {
     return labels.map { InventoryOption(label = it, requiresPreviousProductPhoto = false) }
@@ -256,7 +270,8 @@ fun RequestsScreen(
     modifier: Modifier = Modifier,
     onHomeClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
-    onRegisterSuccess: () -> Unit = {}
+    onRegisterSuccess: () -> Unit = {},
+    initialPreset: String? = null
 ) {
     val context = LocalContext.current
     val materialsSection = remember {
@@ -296,14 +311,7 @@ fun RequestsScreen(
             RequestSectionTemplate(
                 tab = RequestTab.Epp,
                 title = "EPP",
-                options = defaultOptions(
-                    "Guante de Seguridad",
-                    "Botas de seguridad TALLA 39",
-                    "Botas de seguridad TALLA 40",
-                    "BLOQUEADOR SOLAR",
-                    "Mascarilla KN95",
-                    "Casco de Seguridad"
-                )
+                options = eppBootOptions
             )
         )
     }
@@ -316,12 +324,43 @@ fun RequestsScreen(
     var selectedDeliveryZone by remember { mutableStateOf(DeliveryZone.Lima) }
     var isPurchaseRequest by remember { mutableStateOf(false) }
     var expandedItemId by remember { mutableStateOf<String?>(null) }
-    var selectedTab by remember { mutableStateOf(RequestTab.Materials) }
+    val presetKey = remember(initialPreset) { initialPreset?.trim()?.lowercase() }
+    val isEppOnlyFlow = remember(presetKey) {
+        presetKey in setOf("epp", "epps", "botas")
+    }
+    val isAlmacenFlow = remember(presetKey) { presetKey == "almacen" }
+    val isGastoFlow = remember(presetKey) { presetKey == "gasto" }
+    val initialTab = remember(presetKey) {
+        when (presetKey) {
+            "epp", "epps", "botas" -> RequestTab.Epp
+            "almacen" -> RequestTab.Materials
+            "herramientas" -> RequestTab.Tools
+            else -> RequestTab.Materials
+        }
+    }
+    var selectedTab by remember(initialTab) { mutableStateOf(initialTab) }
     val optionsByArea = remember { mutableStateMapOf<Int, List<InventoryOption>>() }
     val optionsErrorByArea = remember { mutableStateMapOf<Int, String>() }
     var loadingAreaId by remember { mutableStateOf<Int?>(null) }
 
+    LaunchedEffect(isEppOnlyFlow, selectedTab) {
+        if (isEppOnlyFlow && !isPurchaseRequest) {
+            isPurchaseRequest = true
+        }
+        if (isEppOnlyFlow && selectedTab == RequestTab.Epp && eppSection.items.isEmpty()) {
+            eppSection.items.add(MaterialItemForm(quantity = "1"))
+        } else if (isEppOnlyFlow && selectedTab == RequestTab.Epp && eppSection.items.isNotEmpty()) {
+            eppSection.items.indices.forEach { index ->
+                val current = eppSection.items[index]
+                if (current.quantity != "1") {
+                    eppSection.items[index] = current.copy(quantity = "1")
+                }
+            }
+        }
+    }
+
     LaunchedEffect(selectedTab) {
+        if (isEppOnlyFlow && selectedTab == RequestTab.Epp) return@LaunchedEffect
         val targetAreaId = selectedTab.areaId
         val targetResponsable = selectedTab.inventoryResponsable
         if (optionsByArea.containsKey(targetAreaId)) return@LaunchedEffect
@@ -338,7 +377,15 @@ fun RequestsScreen(
 
             if (response.isSuccessful) {
                 val remoteOptions = withContext(Dispatchers.Default) {
-                    extractInventoryOptionsForArea(response.body(), targetAreaId)
+                    extractInventoryOptionsForArea(
+                        root = response.body(),
+                        targetAreaId = targetAreaId,
+                        excludedProductIds = if (selectedTab == RequestTab.Epp && isAlmacenFlow) {
+                            hiddenEppBootIdsForAlmacen
+                        } else {
+                            emptySet()
+                        }
+                    )
                 }
                 if (remoteOptions.isNotEmpty()) {
                     optionsByArea[targetAreaId] = remoteOptions
@@ -394,13 +441,27 @@ fun RequestsScreen(
                 esPedidoCompra = isPurchaseRequest
             )
             val result = withContext(Dispatchers.IO) {
-                submitCompleteRequest(
-                    api = api,
-                    sections = allSections,
-                    baseFields = baseFields,
-                    solicitanteUserId = solicitanteUserId,
-                    context = context
-                )
+                if (isEppOnlyFlow) {
+                    submitSolicitudGastoEppRequest(
+                        api = api,
+                        eppSection = eppSection,
+                        solicitanteUserId = solicitanteUserId
+                    )
+                } else if (isGastoFlow) {
+                    submitSolicitudGastoGeneralRequest(
+                        api = api,
+                        sections = allSections,
+                        solicitanteUserId = solicitanteUserId
+                    )
+                } else {
+                    submitCompleteRequest(
+                        api = api,
+                        sections = allSections,
+                        baseFields = baseFields,
+                        solicitanteUserId = solicitanteUserId,
+                        context = context
+                    )
+                }
             }
             isSubmitting = false
             if (result.success) {
@@ -440,7 +501,7 @@ fun RequestsScreen(
             ) {
                 item {
                     val requestTabs = remember {
-                        listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
+                        if (isEppOnlyFlow) listOf(RequestTab.Epp) else listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
                     }
                     val selectedTabIndex = requestTabs.indexOf(selectedTab).coerceAtLeast(0)
                     TabRow(
@@ -463,9 +524,7 @@ fun RequestsScreen(
                                     Text(
                                         text = tab.label,
                                         maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth()
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             )
@@ -511,7 +570,18 @@ fun RequestsScreen(
 
                 activeSections.forEach { section ->
                     item {
-                        val sectionOptions = optionsByArea[section.tab.areaId].orEmpty().ifEmpty { section.options }
+                        val sectionOptions = if (section.tab == RequestTab.Epp && isEppOnlyFlow) {
+                            section.options
+                        } else {
+                            val baseOptions = optionsByArea[section.tab.areaId].orEmpty().ifEmpty { section.options }
+                            if (section.tab == RequestTab.Epp && isAlmacenFlow) {
+                                baseOptions.filterNot { option ->
+                                    option.inventoryId != null && option.inventoryId in hiddenEppBootIdsForAlmacen
+                                }
+                            } else {
+                                baseOptions
+                            }
+                        }
                         RequestForm(
                             section = section,
                             options = sectionOptions,
@@ -567,7 +637,8 @@ fun RequestsScreen(
                                 }
                             },
                             enabledSubmit = totalItems > 0 && !isSubmitting,
-                            isSubmitting = isSubmitting
+                            isSubmitting = isSubmitting,
+                            singleItemFlow = isEppOnlyFlow && selectedTab == RequestTab.Epp
                         )
                     }
                 }
@@ -585,6 +656,7 @@ fun RequestsScreen(
                     onDeliveryZoneChange = { selectedDeliveryZone = it },
                     isPurchaseRequest = isPurchaseRequest,
                     onPurchaseRequestChange = { isPurchaseRequest = it },
+                    showPurchaseOption = false,
                     onDismiss = { showConfirmDialog = false },
                     onConfirm = submitConfirmedRequest
                 )
@@ -641,6 +713,7 @@ private fun RequestConfirmationDialog(
     onDeliveryZoneChange: (DeliveryZone) -> Unit,
     isPurchaseRequest: Boolean,
     onPurchaseRequestChange: (Boolean) -> Unit,
+    showPurchaseOption: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -691,30 +764,32 @@ private fun RequestConfirmationDialog(
                     )
                 }
 
-                Text(
-                    text = "Solicitud de compra",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BodyColor
-                )
-                TabRow(
-                    selectedTabIndex = if (isPurchaseRequest) 1 else 0,
-                    containerColor = Color.White,
-                    divider = { HorizontalDivider(color = BrandBorder) }
-                ) {
-                    Tab(
-                        selected = !isPurchaseRequest,
-                        onClick = { onPurchaseRequestChange(false) },
-                        selectedContentColor = AccentColor,
-                        unselectedContentColor = BrandMuted,
-                        text = { Text("No") }
+                if (showPurchaseOption) {
+                    Text(
+                        text = "Solicitud de compra",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BodyColor
                     )
-                    Tab(
-                        selected = isPurchaseRequest,
-                        onClick = { onPurchaseRequestChange(true) },
-                        selectedContentColor = AccentColor,
-                        unselectedContentColor = BrandMuted,
-                        text = { Text("Si") }
-                    )
+                    TabRow(
+                        selectedTabIndex = if (isPurchaseRequest) 1 else 0,
+                        containerColor = Color.White,
+                        divider = { HorizontalDivider(color = BrandBorder) }
+                    ) {
+                        Tab(
+                            selected = !isPurchaseRequest,
+                            onClick = { onPurchaseRequestChange(false) },
+                            selectedContentColor = AccentColor,
+                            unselectedContentColor = BrandMuted,
+                            text = { Text("No") }
+                        )
+                        Tab(
+                            selected = isPurchaseRequest,
+                            onClick = { onPurchaseRequestChange(true) },
+                            selectedContentColor = AccentColor,
+                            unselectedContentColor = BrandMuted,
+                            text = { Text("Si") }
+                        )
+                    }
                 }
 
                 Column(
@@ -789,7 +864,8 @@ private fun RequestForm(
     onPhotoChange: (Int, String?, Bitmap?) -> Unit,
     onSubmit: () -> Unit,
     enabledSubmit: Boolean,
-    isSubmitting: Boolean
+    isSubmitting: Boolean,
+    singleItemFlow: Boolean = false
 ) {
     var pendingPhotoIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -819,20 +895,28 @@ private fun RequestForm(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                FilledTonalButton(
-                    onClick = onAddItem,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = AccentSoft,
-                        contentColor = AccentColor
+                if (!singleItemFlow) {
+                    FilledTonalButton(
+                        onClick = onAddItem,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentSoft,
+                            contentColor = AccentColor
+                        )
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Agregar")
+                    }
+                } else {
+                    Text(
+                        text = "Preparando formulario de botas...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandMuted
                     )
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Agregar")
                 }
             }
         } else {
@@ -859,7 +943,10 @@ private fun RequestForm(
                             pendingPhotoIndex = index
                             cameraLauncher.launch(null)
                         },
-                        showValidation = submitAttempted
+                        showValidation = submitAttempted,
+                        showAddButton = !singleItemFlow,
+                        showDeleteButton = !singleItemFlow,
+                        lockQuantity = singleItemFlow
                     )
                 }
             }
@@ -963,6 +1050,173 @@ private suspend fun submitCompleteRequest(
             message = "Error enviando solicitud: ${e.message.orEmpty()}"
         )
     }
+}
+
+private suspend fun submitSolicitudGastoEppRequest(
+    api: com.example.myapplication.data.remote.network.ApiService,
+    eppSection: RequestSectionState,
+    solicitanteUserId: Int
+): SubmitRequestResult {
+    val detalles = JsonArray()
+
+    eppSection.items.forEachIndexed { index, item ->
+        val productId = item.selectedInventoryId ?: return@forEachIndexed
+        val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEachIndexed
+
+        val detalle = JsonObject().apply {
+            addProperty("id_producto", productId)
+            addProperty("cantidad", cantidad)
+            addProperty("precio_estimado", 0.0)
+            addProperty("precio_real", 0.0)
+            addProperty("descripcion_adicional", inferBootDescription(item.description))
+            addProperty("ruta_imagen", resolveRutaImagenForJson(item, index, "bota"))
+        }
+        detalles.add(detalle)
+    }
+
+    if (detalles.size() == 0) {
+        return SubmitRequestResult(
+            success = false,
+            message = "No hay botas validas para registrar."
+        )
+    }
+
+    val payload = JsonObject().apply {
+        addProperty("staff_id", solicitanteUserId)
+        addProperty("id_area", EPP_AREA_ID)
+        addProperty("motivo", "Solicitud EPP - Botas de seguridad")
+        addProperty("monto_estimado", 0.0)
+        addProperty("monto_real", 0.0)
+        addProperty("estado", "pendiente")
+        addProperty(
+            "fecha_solicitud",
+            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        )
+        add("solicitud_gasto_detalles", detalles)
+    }
+
+    return try {
+        val response = api.registrarSolicitudGasto(payload)
+        if (!response.isSuccessful) {
+            val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
+            return SubmitRequestResult(
+                success = false,
+                message = backendMessage ?: "No se pudo registrar la solicitud de EPP (${response.code()})."
+            )
+        }
+
+        val bodyObj = response.body()?.asJsonObject
+        val backendSuccess = bodyObj?.get("success").asBooleanOrNull() ?: true
+        val backendMessage = bodyObj?.get("message").asNonBlankStringOrNull()
+            ?: "Solicitud de EPP registrada correctamente."
+
+        if (!backendSuccess) {
+            SubmitRequestResult(success = false, message = backendMessage)
+        } else {
+            SubmitRequestResult(success = true, message = backendMessage)
+        }
+    } catch (e: Exception) {
+        SubmitRequestResult(
+            success = false,
+            message = "Error enviando solicitud de EPP: ${e.message.orEmpty()}"
+        )
+    }
+}
+
+private suspend fun submitSolicitudGastoGeneralRequest(
+    api: com.example.myapplication.data.remote.network.ApiService,
+    sections: List<RequestSectionState>,
+    solicitanteUserId: Int
+): SubmitRequestResult {
+    val detalles = JsonArray()
+    var detailIndex = 0
+
+    sections.forEach { section ->
+        section.items.forEach { item ->
+            val productId = item.selectedInventoryId ?: return@forEach
+            val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEach
+
+            val detalle = JsonObject().apply {
+                addProperty("id_producto", productId)
+                addProperty("cantidad", cantidad)
+                addProperty("precio_estimado", 0.0)
+                addProperty("precio_real", 0.0)
+                addProperty(
+                    "descripcion_adicional",
+                    item.observations.takeIf { it.isNotBlank() } ?: item.description
+                )
+                addProperty("ruta_imagen", resolveRutaImagenForJson(item, detailIndex, "general"))
+            }
+            detalles.add(detalle)
+            detailIndex += 1
+        }
+    }
+
+    if (detalles.size() == 0) {
+        return SubmitRequestResult(
+            success = false,
+            message = "No hay items validos para registrar en almacen."
+        )
+    }
+
+    val payload = JsonObject().apply {
+        addProperty("staff_id", solicitanteUserId)
+        addProperty("id_area", ALMACEN_SOLICITUD_GENERAL_AREA_ID)
+        addProperty("motivo", "Solicitud general de almacen")
+        addProperty("monto_estimado", 0.0)
+        addProperty("monto_real", 0.0)
+        addProperty("estado", "pendiente")
+        addProperty(
+            "fecha_solicitud",
+            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        )
+        add("solicitud_gasto_detalles", detalles)
+    }
+
+    return try {
+        val response = api.registrarSolicitudGasto(payload)
+        if (!response.isSuccessful) {
+            val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
+            return SubmitRequestResult(
+                success = false,
+                message = backendMessage ?: "No se pudo registrar la solicitud de almacen (${response.code()})."
+            )
+        }
+
+        val bodyObj = response.body()?.asJsonObject
+        val backendSuccess = bodyObj?.get("success").asBooleanOrNull() ?: true
+        val backendMessage = bodyObj?.get("message").asNonBlankStringOrNull()
+            ?: "Solicitud de almacen registrada correctamente."
+
+        if (!backendSuccess) {
+            SubmitRequestResult(success = false, message = backendMessage)
+        } else {
+            SubmitRequestResult(success = true, message = backendMessage)
+        }
+    } catch (e: Exception) {
+        SubmitRequestResult(
+            success = false,
+            message = "Error enviando solicitud de almacen: ${e.message.orEmpty()}"
+        )
+    }
+}
+
+private fun inferBootDescription(label: String): String {
+    val normalized = label.trim()
+    return when {
+        normalized.contains("TALLA", ignoreCase = true) -> normalized
+        normalized.isBlank() -> "Botas de seguridad"
+        else -> normalized
+    }
+}
+
+private fun resolveRutaImagenForJson(
+    item: MaterialItemForm,
+    index: Int,
+    prefix: String = "item"
+): String {
+    return item.photoUri?.takeIf { it.isNotBlank() }
+        ?: "captura_local/${prefix}_item_${index + 1}.jpg"
 }
 
 private fun appendSectionParts(
@@ -1098,7 +1352,10 @@ private fun MaterialItemCard(
     onObservationsChange: (String) -> Unit,
     onGalleryPhotoClick: () -> Unit,
     onCameraPhotoClick: () -> Unit,
-    showValidation: Boolean
+    showValidation: Boolean,
+    showAddButton: Boolean = true,
+    showDeleteButton: Boolean = true,
+    lockQuantity: Boolean = false
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -1151,28 +1408,30 @@ private fun MaterialItemCard(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier
-                    .width(44.dp)
-                    .height(44.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = DangerSoft,
-                    border = BorderStroke(1.dp, Color(0xFFFECACA))
+            if (showDeleteButton) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .width(44.dp)
+                        .height(44.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(44.dp)
-                            .height(44.dp),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = DangerSoft,
+                        border = BorderStroke(1.dp, Color(0xFFFECACA))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Eliminar item",
-                            tint = DangerColor
-                        )
+                        Box(
+                            modifier = Modifier
+                                .width(44.dp)
+                                .height(44.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Eliminar item",
+                                tint = DangerColor
+                            )
+                        }
                     }
                 }
             }
@@ -1191,15 +1450,22 @@ private fun MaterialItemCard(
         OutlinedTextField(
             value = item.quantity,
             onValueChange = { value ->
-                onQuantityChange(value.filter(Char::isDigit))
+                if (!lockQuantity) {
+                    onQuantityChange(value.filter(Char::isDigit))
+                }
             },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Cantidad") },
             singleLine = true,
+            enabled = !lockQuantity,
             isError = quantityError != null,
             supportingText = {
-                quantityError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                if (lockQuantity) {
+                    Text(text = "Cantidad fija: 1", color = BrandMuted)
+                } else {
+                    quantityError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             },
             shape = RoundedCornerShape(18.dp),
@@ -1249,36 +1515,42 @@ private fun MaterialItemCard(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilledTonalButton(
-                onClick = onAdd,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = AccentSoft,
-                    contentColor = AccentColor
-                )
+        if (showAddButton || showDeleteButton) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null)
-            }
+                if (showAddButton) {
+                    FilledTonalButton(
+                        onClick = onAdd,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = AccentSoft,
+                            contentColor = AccentColor
+                        )
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    }
+                }
 
-            OutlinedButton(
-                onClick = onDelete,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, Color(0xFFFECACA)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = DangerColor
-                )
-            ) {
-                Icon(imageVector = Icons.Default.Delete, contentDescription = null)
+                if (showDeleteButton) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFFECACA)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = DangerColor
+                        )
+                    ) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = null)
+                    }
+                }
             }
         }
     }
@@ -1388,7 +1660,11 @@ private fun PhotoAttachmentSection(
     }
 }
 
-private fun extractInventoryOptionsForArea(root: JsonElement?, targetAreaId: Int): List<InventoryOption> {
+private fun extractInventoryOptionsForArea(
+    root: JsonElement?,
+    targetAreaId: Int,
+    excludedProductIds: Set<Int> = emptySet()
+): List<InventoryOption> {
     if (root == null || root.isJsonNull) return emptyList()
 
     // Fast path for payload:
@@ -1408,6 +1684,10 @@ private fun extractInventoryOptionsForArea(root: JsonElement?, targetAreaId: Int
                 if (filterByArea && areaId != null && areaId != targetAreaId) return@forEach
 
                 val inventoryId = extractInventoryId(obj) ?: return@forEach
+                val productId = obj.get("id_producto").asIntOrNull()
+                if ((productId != null && productId in excludedProductIds) || inventoryId in excludedProductIds) {
+                    return@forEach
+                }
                 val label = obj.get("producto").asNonBlankStringOrNull() ?: extractProductLabel(obj)
                 val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
                 if (!label.isNullOrBlank()) {
@@ -1433,26 +1713,33 @@ private fun extractInventoryOptionsForArea(root: JsonElement?, targetAreaId: Int
     }
 
     // Fallback for non-standard payloads.
-    return extractInventoryOptionsByArea(root)[targetAreaId].orEmpty()
+    return extractInventoryOptionsByArea(
+        root = root,
+        excludedProductIds = excludedProductIds
+    )[targetAreaId].orEmpty()
 }
 
-private fun extractInventoryOptionsByArea(root: JsonElement?): Map<Int, List<InventoryOption>> {
+private fun extractInventoryOptionsByArea(
+    root: JsonElement?,
+    excludedProductIds: Set<Int> = emptySet()
+): Map<Int, List<InventoryOption>> {
     if (root == null || root.isJsonNull) return emptyMap()
 
     val collector = mutableMapOf<Int, LinkedHashMap<Int, InventoryOption>>()
-    collectInventoryOptions(root, collector)
+    collectInventoryOptions(root, collector, excludedProductIds)
 
     return collector.mapValues { (_, value) -> value.values.toList() }
 }
 
 private fun collectInventoryOptions(
     element: JsonElement,
-    collector: MutableMap<Int, LinkedHashMap<Int, InventoryOption>>
+    collector: MutableMap<Int, LinkedHashMap<Int, InventoryOption>>,
+    excludedProductIds: Set<Int>
 ) {
     when {
         element.isJsonArray -> {
             element.asJsonArray.forEach { child ->
-                collectInventoryOptions(child, collector)
+                collectInventoryOptions(child, collector, excludedProductIds)
             }
         }
 
@@ -1460,9 +1747,13 @@ private fun collectInventoryOptions(
             val obj = element.asJsonObject
             val areaId = obj.get("id_area").asIntOrNull()
             val inventoryId = extractInventoryId(obj)
+            val productId = obj.get("id_producto").asIntOrNull()
             val label = extractProductLabel(obj)
             val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
-            if (areaId != null && inventoryId != null && !label.isNullOrBlank()) {
+            val isExcluded =
+                (productId != null && productId in excludedProductIds) ||
+                    (inventoryId != null && inventoryId in excludedProductIds)
+            if (!isExcluded && areaId != null && inventoryId != null && !label.isNullOrBlank()) {
                 val areaCollector = collector.getOrPut(areaId) { linkedMapOf() }
                 val previous = areaCollector[inventoryId]
                 areaCollector[inventoryId] = InventoryOption(
@@ -1474,7 +1765,7 @@ private fun collectInventoryOptions(
             }
 
             obj.entrySet().forEach { (_, child) ->
-                collectInventoryOptions(child, collector)
+                collectInventoryOptions(child, collector, excludedProductIds)
             }
         }
     }
@@ -1482,8 +1773,8 @@ private fun collectInventoryOptions(
 
 private fun extractInventoryId(obj: JsonObject): Int? {
     val candidateKeys = listOf(
-        "id_inventario",
         "id_producto",
+        "id_inventario",
         "id_item",
         "inventario_id",
         "id"
@@ -1679,3 +1970,4 @@ private fun DescriptionDropdownField(
         }
     }
 }
+

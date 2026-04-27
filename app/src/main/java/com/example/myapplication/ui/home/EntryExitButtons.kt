@@ -14,8 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,20 +65,20 @@ fun EntryExitButtons(
                 QuickActionTile(
                     modifier = Modifier.weight(1f),
                     label = "ENTRADA",
-                    icon = Icons.Default.ArrowUpward,
+                    icon = Icons.Default.CameraAlt,
                     accent = BrandBlue,
-                    container = BrandBlue,
-                    contentColor = Color.White,
+                    container = Color.White,
+                    contentColor = BrandBlueDark,
                     isBusy = isBusy && activeType == AttendanceType.ENTRADA,
                     onClick = onEntry
                 )
                 QuickActionTile(
                     modifier = Modifier.weight(1f),
                     label = "SALIDA",
-                    icon = Icons.Default.ArrowDownward,
+                    icon = Icons.Default.CameraAlt,
                     accent = BrandOrangeSoft,
-                    container = Color(0xFFAF4B00),
-                    contentColor = Color.White,
+                    container = Color.White,
+                    contentColor = Color(0xFF9A4A10),
                     isBusy = isBusy && activeType == AttendanceType.SALIDA,
                     onClick = onExit
                 )
@@ -101,33 +100,34 @@ private fun QuickActionTile(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.height(108.dp),
+        modifier = modifier.height(96.dp),
         shape = RoundedCornerShape(22.dp),
         color = container,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f))
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .background(Color.White.copy(alpha = 0.20f), CircleShape),
+                    .size(30.dp)
+                    .background(accent.copy(alpha = 0.14f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(
                         color = contentColor,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 } else {
                     Icon(
                         imageVector = icon,
                         contentDescription = label,
-                        tint = contentColor
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }

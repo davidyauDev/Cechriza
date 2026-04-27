@@ -327,12 +327,12 @@ fun HomeScreen(
 
                     is LocationResult.Error -> {
                         val message = when (result.reason) {
-                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicaciÃ³n. ActÃ­valos en Ajustes."
-                            LocationError.GPS_DISABLED -> "Tu GPS estÃ¡ desactivado. ActÃ­valo e intÃ©ntalo nuevamente."
-                            LocationError.TIMEOUT -> "El GPS tardÃ³ demasiado en responder. Intenta moverte o verifica la seÃ±al."
-                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicaciÃ³n. Intenta nuevamente."
-                            LocationError.INACCURATE -> "La seÃ±al GPS es imprecisa. Busca un lugar mÃ¡s abierto e intÃ©ntalo otra vez."
-                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicaciÃ³n."
+                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicación. Actívalos en Ajustes."
+                            LocationError.GPS_DISABLED -> "Tu GPS está desactivado. Actívalo e inténtalo nuevamente."
+                            LocationError.TIMEOUT -> "El GPS tardó demasiado en responder. Intenta moverte o verifica la señal."
+                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicación. Intenta nuevamente."
+                            LocationError.INACCURATE -> "La señal GPS es imprecisa. Busca un lugar más abierto e inténtalo otra vez."
+                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicación."
                         }
 
                         // Aseguramos visibilidad: log + toast + snackbar + diÃ¡logo modal
@@ -501,7 +501,7 @@ fun HomeScreen(
         }
 
         if (shouldShowRationaleAny) {
-            rationaleMessage = "La app necesita acceso a cÃ¡mara y ubicaciÃ³n para registrar tu asistencia."
+            rationaleMessage = "La app necesita acceso a cámara y ubicación para registrar tu asistencia."
             showRationaleDialog = true
         } else {
             permissionLauncher.launch(toRequest.toTypedArray())
@@ -627,7 +627,7 @@ fun HomeScreen(
                     )
 
                     DrawerCardItem(
-                        title = "Rutas del día",
+                        title = "Rutas",
                         subtitle = "Recorridos asignados",
                         badge = "R",
                         selected = selectedDrawerItem == "Routes",
@@ -685,7 +685,7 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Ubicacion desactivada. Activala para registrar asistencia.",
+                                    text = "Ubicación desactivada. Actívala para registrar asistencia.",
                                     modifier = Modifier.weight(1f),
                                     color = BrandText
                                 )
@@ -831,11 +831,11 @@ fun HomeScreen(
                                 showEnableLocationDialog = false
                                 isCheckingPermissions = false
                                 openLocationSettings(context)
-                            }) { Text("Abrir ajustes de ubicaciÃ³n") }
+                            }) { Text("Abrir ajustes de ubicación") }
                         },
                         dismissButton = { TextButton(onClick = { showEnableLocationDialog = false }) { Text("Cancelar") } },
-                        title = { Text("UbicaciÃ³n desactivada") },
-                        text = { Text("La ubicaciÃ³n (GPS) estÃ¡ desactivada. ActÃ­vala para que la app pueda obtener tu posiciÃ³n al registrar la asistencia.") }
+                        title = { Text("Ubicación desactivada") },
+                        text = { Text("La ubicación (GPS) está desactivada. Actívala para que la app pueda obtener tu posición al registrar la asistencia.") }
                     )
                 }
 
