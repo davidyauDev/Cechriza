@@ -18,6 +18,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.example.myapplication.data.local.database.AttendanceDatabase
 import com.example.myapplication.data.local.entity.AttendanceType
 import com.example.myapplication.data.preferences.UserPreferences
@@ -33,6 +35,7 @@ import com.example.myapplication.ui.home.HomeScreen
 import com.example.myapplication.ui.home.RoutesScreen
 import com.example.myapplication.ui.login.LoginScreen
 import com.example.myapplication.ui.notifications.NotificationsScreen
+import com.example.myapplication.ui.comprobante.RegistrarComprobanteScreen
 import com.example.myapplication.ui.requests.RequestsScreen
 import kotlinx.coroutines.delay
 import androidx.compose.material3.Text
@@ -138,7 +141,18 @@ fun AppNavigation(navController: NavHostController) {
             NotificationsScreen(
                 navController = navController,
                 showBackButton = true,
-                onAddRequestClick = { preset -> navController.navigate("requests_form/$preset") }
+                onAddRequestClick = { preset ->
+                    if (preset.startsWith("comprobante")) {
+                        val solicitudId = preset.substringAfter("comprobante:", "")
+                        if (solicitudId.isNotBlank()) {
+                            navController.navigate("comprobante_form/$solicitudId")
+                        } else {
+                            navController.navigate("comprobante_form")
+                        }
+                    } else {
+                        navController.navigate("requests_form/$preset")
+                    }
+                }
             )
         }
 
@@ -168,6 +182,51 @@ fun AppNavigation(navController: NavHostController) {
                     }
                 },
                 initialPreset = preset
+            )
+        }
+
+        composable(
+            route = "comprobante_form/{solicitudId}",
+            arguments = listOf(
+                navArgument("solicitudId") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                }
+            )
+        ) { backStackEntry ->
+            val solicitudIdArg = backStackEntry.arguments?.getInt("solicitudId") ?: -1
+            RegistrarComprobanteScreen(
+                initialSolicitudGastoId = solicitudIdArg.takeIf { it > 0 },
+                onBackClick = { navController.popBackStack() },
+                onUnauthorized = {
+                    navController.navigate("login") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                },
+                onSaved = {
+                    navController.navigate("notifications") {
+                        popUpTo("comprobante_form") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable("comprobante_form") {
+            RegistrarComprobanteScreen(
+                initialSolicitudGastoId = null,
+                onBackClick = { navController.popBackStack() },
+                onUnauthorized = {
+                    navController.navigate("login") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                },
+                onSaved = {
+                    navController.navigate("notifications") {
+                        popUpTo("comprobante_form") { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
             )
         }
 
@@ -241,7 +300,18 @@ fun ContentScreen(
             navController = navController,
             modifier = modifier,
             showBackButton = false,
-            onAddRequestClick = { preset -> navController.navigate("requests_form/$preset") }
+            onAddRequestClick = { preset ->
+                if (preset.startsWith("comprobante")) {
+                    val solicitudId = preset.substringAfter("comprobante:", "")
+                    if (solicitudId.isNotBlank()) {
+                        navController.navigate("comprobante_form/$solicitudId")
+                    } else {
+                        navController.navigate("comprobante_form")
+                    }
+                } else {
+                    navController.navigate("requests_form/$preset")
+                }
+            }
         )
         3 -> AccountScreen(
             modifier = modifier,

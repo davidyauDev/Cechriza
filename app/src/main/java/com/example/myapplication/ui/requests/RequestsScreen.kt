@@ -445,13 +445,15 @@ fun RequestsScreen(
                     submitSolicitudGastoEppRequest(
                         api = api,
                         eppSection = eppSection,
-                        solicitanteUserId = solicitanteUserId
+                        solicitanteUserId = solicitanteUserId,
+                        context = context
                     )
                 } else if (isGastoFlow) {
                     submitSolicitudGastoGeneralRequest(
                         api = api,
                         sections = allSections,
-                        solicitanteUserId = solicitanteUserId
+                        solicitanteUserId = solicitanteUserId,
+                        context = context
                     )
                 } else {
                     submitCompleteRequest(
@@ -1055,48 +1057,55 @@ private suspend fun submitCompleteRequest(
 private suspend fun submitSolicitudGastoEppRequest(
     api: com.example.myapplication.data.remote.network.ApiService,
     eppSection: RequestSectionState,
-    solicitanteUserId: Int
+    solicitanteUserId: Int,
+    context: android.content.Context
 ): SubmitRequestResult {
-    val detalles = JsonArray()
-
-    eppSection.items.forEachIndexed { index, item ->
-        val productId = item.selectedInventoryId ?: return@forEachIndexed
-        val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEachIndexed
-
-        val detalle = JsonObject().apply {
-            addProperty("id_producto", productId)
-            addProperty("cantidad", cantidad)
-            addProperty("precio_estimado", 0.0)
-            addProperty("precio_real", 0.0)
-            addProperty("descripcion_adicional", inferBootDescription(item.description))
-            addProperty("ruta_imagen", resolveRutaImagenForJson(item, index, "bota"))
-        }
-        detalles.add(detalle)
+    val validItems = eppSection.items.mapIndexedNotNull { index, item ->
+        val productId = item.selectedInventoryId ?: return@mapIndexedNotNull null
+        val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@mapIndexedNotNull null
+        Triple(index, item, productId to cantidad)
     }
 
-    if (detalles.size() == 0) {
+    if (validItems.isEmpty()) {
         return SubmitRequestResult(
             success = false,
             message = "No hay botas validas para registrar."
         )
     }
 
-    val payload = JsonObject().apply {
-        addProperty("staff_id", solicitanteUserId)
-        addProperty("id_area", EPP_AREA_ID)
-        addProperty("motivo", "Solicitud EPP - Botas de seguridad")
-        addProperty("monto_estimado", 0.0)
-        addProperty("monto_real", 0.0)
-        addProperty("estado", "pendiente")
-        addProperty(
-            "fecha_solicitud",
-            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-        )
-        add("solicitud_gasto_detalles", detalles)
-    }
-
     return try {
-        val response = api.registrarSolicitudGasto(payload)
+        val parts = mutableListOf<MultipartBody.Part>()
+        appendSolicitudGastoBaseParts(
+            parts = parts,
+            solicitanteUserId = solicitanteUserId,
+            areaId = EPP_AREA_ID,
+            motivo = "Solicitud EPP - Botas de seguridad"
+        )
+
+        validItems.forEach { (index, item, idCantidad) ->
+            val (productId, cantidad) = idCantidad
+            appendSolicitudGastoDetalleParts(
+                parts = parts,
+                detailIndex = index,
+                idProducto = productId,
+                cantidad = cantidad,
+                precioEstimado = 0.0,
+                precioReal = 0.0,
+                descripcionAdicional = inferBootDescription(item.description)
+            )
+            val archivoPart = buildSolicitudGastoArchivoPart(
+                context = context,
+                item = item,
+                detailIndex = index,
+                fallbackPrefix = "bota"
+            ) ?: return SubmitRequestResult(
+                success = false,
+                message = "Adjunta una imagen o PDF valido (max 10MB) para cada detalle."
+            )
+            parts += archivoPart
+        }
+
+        val response = api.registrarSolicitudGasto(parts)
         if (!response.isSuccessful) {
             val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
             return SubmitRequestResult(
@@ -1126,55 +1135,60 @@ private suspend fun submitSolicitudGastoEppRequest(
 private suspend fun submitSolicitudGastoGeneralRequest(
     api: com.example.myapplication.data.remote.network.ApiService,
     sections: List<RequestSectionState>,
-    solicitanteUserId: Int
+    solicitanteUserId: Int,
+    context: android.content.Context
 ): SubmitRequestResult {
-    val detalles = JsonArray()
+    val validItems = mutableListOf<Triple<Int, MaterialItemForm, Pair<Int, Int>>>()
     var detailIndex = 0
-
     sections.forEach { section ->
         section.items.forEach { item ->
             val productId = item.selectedInventoryId ?: return@forEach
             val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEach
-
-            val detalle = JsonObject().apply {
-                addProperty("id_producto", productId)
-                addProperty("cantidad", cantidad)
-                addProperty("precio_estimado", 0.0)
-                addProperty("precio_real", 0.0)
-                addProperty(
-                    "descripcion_adicional",
-                    item.observations.takeIf { it.isNotBlank() } ?: item.description
-                )
-                addProperty("ruta_imagen", resolveRutaImagenForJson(item, detailIndex, "general"))
-            }
-            detalles.add(detalle)
+            validItems += Triple(detailIndex, item, productId to cantidad)
             detailIndex += 1
         }
     }
 
-    if (detalles.size() == 0) {
+    if (validItems.isEmpty()) {
         return SubmitRequestResult(
             success = false,
             message = "No hay items validos para registrar en almacen."
         )
     }
 
-    val payload = JsonObject().apply {
-        addProperty("staff_id", solicitanteUserId)
-        addProperty("id_area", ALMACEN_SOLICITUD_GENERAL_AREA_ID)
-        addProperty("motivo", "Solicitud general de almacen")
-        addProperty("monto_estimado", 0.0)
-        addProperty("monto_real", 0.0)
-        addProperty("estado", "pendiente")
-        addProperty(
-            "fecha_solicitud",
-            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-        )
-        add("solicitud_gasto_detalles", detalles)
-    }
-
     return try {
-        val response = api.registrarSolicitudGasto(payload)
+        val parts = mutableListOf<MultipartBody.Part>()
+        appendSolicitudGastoBaseParts(
+            parts = parts,
+            solicitanteUserId = solicitanteUserId,
+            areaId = ALMACEN_SOLICITUD_GENERAL_AREA_ID,
+            motivo = "Solicitud general de almacen"
+        )
+
+        validItems.forEach { (index, item, idCantidad) ->
+            val (productId, cantidad) = idCantidad
+            appendSolicitudGastoDetalleParts(
+                parts = parts,
+                detailIndex = index,
+                idProducto = productId,
+                cantidad = cantidad,
+                precioEstimado = 0.0,
+                precioReal = 0.0,
+                descripcionAdicional = item.observations.takeIf { it.isNotBlank() } ?: item.description
+            )
+            val archivoPart = buildSolicitudGastoArchivoPart(
+                context = context,
+                item = item,
+                detailIndex = index,
+                fallbackPrefix = "general"
+            ) ?: return SubmitRequestResult(
+                success = false,
+                message = "Adjunta una imagen o PDF valido (max 10MB) para cada detalle."
+            )
+            parts += archivoPart
+        }
+
+        val response = api.registrarSolicitudGasto(parts)
         if (!response.isSuccessful) {
             val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
             return SubmitRequestResult(
@@ -1210,13 +1224,116 @@ private fun inferBootDescription(label: String): String {
     }
 }
 
-private fun resolveRutaImagenForJson(
+private fun appendSolicitudGastoBaseParts(
+    parts: MutableList<MultipartBody.Part>,
+    solicitanteUserId: Int,
+    areaId: Int,
+    motivo: String
+) {
+    val fechaSolicitud = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+    parts += MultipartBody.Part.createFormData("staff_id", solicitanteUserId.toString())
+    parts += MultipartBody.Part.createFormData("id_area", areaId.toString())
+    parts += MultipartBody.Part.createFormData("motivo", motivo)
+    parts += MultipartBody.Part.createFormData("monto_estimado", "0.0")
+    parts += MultipartBody.Part.createFormData("monto_real", "0.0")
+    parts += MultipartBody.Part.createFormData("estado", "pendiente")
+    parts += MultipartBody.Part.createFormData("fecha_solicitud", fechaSolicitud)
+}
+
+private fun appendSolicitudGastoDetalleParts(
+    parts: MutableList<MultipartBody.Part>,
+    detailIndex: Int,
+    idProducto: Int,
+    cantidad: Int,
+    precioEstimado: Double?,
+    precioReal: Double?,
+    descripcionAdicional: String?
+) {
+    parts += MultipartBody.Part.createFormData(
+        "solicitud_gasto_detalles[$detailIndex][id_producto]",
+        idProducto.toString()
+    )
+    parts += MultipartBody.Part.createFormData(
+        "solicitud_gasto_detalles[$detailIndex][cantidad]",
+        cantidad.toString()
+    )
+    precioEstimado?.let {
+        parts += MultipartBody.Part.createFormData(
+            "solicitud_gasto_detalles[$detailIndex][precio_estimado]",
+            it.toString()
+        )
+    }
+    precioReal?.let {
+        parts += MultipartBody.Part.createFormData(
+            "solicitud_gasto_detalles[$detailIndex][precio_real]",
+            it.toString()
+        )
+    }
+    descripcionAdicional?.takeIf { it.isNotBlank() }?.let {
+        parts += MultipartBody.Part.createFormData(
+            "solicitud_gasto_detalles[$detailIndex][descripcion_adicional]",
+            it
+        )
+    }
+}
+
+private fun buildSolicitudGastoArchivoPart(
+    context: android.content.Context,
     item: MaterialItemForm,
-    index: Int,
-    prefix: String = "item"
-): String {
-    return item.photoUri?.takeIf { it.isNotBlank() }
-        ?: "captura_local/${prefix}_item_${index + 1}.jpg"
+    detailIndex: Int,
+    fallbackPrefix: String
+): MultipartBody.Part? {
+    val partName = "solicitud_gasto_detalles[$detailIndex][archivo]"
+    val maxBytes = 10L * 1024L * 1024L
+    val allowedMime = setOf(
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "application/pdf"
+    )
+
+    item.photoBitmap?.let { bitmap ->
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)
+        val bytes = output.toByteArray()
+        if (bytes.isEmpty() || bytes.size > maxBytes) return null
+        val fileName = "${fallbackPrefix}_detalle_${detailIndex + 1}.jpg"
+        val requestBody = bytes.toRequestBody("image/jpeg".toMediaType())
+        return MultipartBody.Part.createFormData(partName, fileName, requestBody)
+    }
+
+    val photoUri = item.photoUri ?: return null
+    val uri = Uri.parse(photoUri)
+    val resolver = context.contentResolver
+    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+    if (bytes.isEmpty() || bytes.size > maxBytes) return null
+
+    val mimeTypeRaw = resolver.getType(uri)?.lowercase()
+    val fileName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+        ?: "${fallbackPrefix}_detalle_${detailIndex + 1}"
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    val mimeFromExt = when (extension) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "pdf" -> "application/pdf"
+        else -> null
+    }
+    val mimeType = mimeTypeRaw ?: mimeFromExt ?: return null
+    if (mimeType !in allowedMime) return null
+
+    val finalFileName = if ('.' in fileName) fileName else {
+        val ext = when (mimeType) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "pdf"
+        }
+        "$fileName.$ext"
+    }
+    val requestBody = bytes.toRequestBody(mimeType.toMediaType())
+    return MultipartBody.Part.createFormData(partName, finalFileName, requestBody)
 }
 
 private fun appendSectionParts(

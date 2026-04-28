@@ -1,11 +1,11 @@
-package com.example.myapplication.data.remote.network
+﻿package com.example.myapplication.data.remote.network
 
 import com.example.myapplication.data.remote.dto.request.LoginRequest
 import com.example.myapplication.data.remote.dto.response.AttendanceResponse
 import com.example.myapplication.data.remote.dto.response.EventosHoyResponse
 import com.example.myapplication.data.remote.dto.response.LoginResponseTotal
+import com.example.myapplication.data.remote.dto.response.RegisterComprobanteGastoResponse
 import com.google.gson.JsonElement
-import com.google.gson.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -41,16 +41,12 @@ interface ApiService {
         @Part photo: MultipartBody.Part
     ): Response<AttendanceResponse>
 
-
-
-    // Endpoint para obtener rutas del día (devuelve Json flexible)
     @GET("technicians/rutas-dia")
     suspend fun getRutasDia(
         @Query("emp_code") empCode: String,
         @Query("fecha") fecha: String? = null
     ): Response<JsonElement>
 
-    // Nuevo endpoint: eventos hoy
     @GET("eventos/hoy")
     suspend fun getEventosHoy(): Response<EventosHoyResponse>
 
@@ -84,8 +80,19 @@ interface ApiService {
         @Body multipartBody: MultipartBody
     ): Response<JsonElement>
 
+    @Multipart
     @POST("solicitudes-gasto")
     suspend fun registrarSolicitudGasto(
-        @Body body: JsonObject
+        @Part parts: List<MultipartBody.Part>
     ): Response<JsonElement>
+
+    @Multipart
+    @POST("solicitudes-gasto/comprobantes")
+    suspend fun registerComprobanteGasto(
+        @Part("solicitud_gasto_id") solicitudGastoId: RequestBody,
+        @Part("tipo") tipo: RequestBody,
+        @Part("numero") numero: RequestBody,
+        @Part("monto") monto: RequestBody,
+        @Part archivo: MultipartBody.Part
+    ): Response<RegisterComprobanteGastoResponse>
 }

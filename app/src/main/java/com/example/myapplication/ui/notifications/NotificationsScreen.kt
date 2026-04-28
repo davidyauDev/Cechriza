@@ -501,7 +501,8 @@ private fun ComprobanteListCard(
 @Composable
 private fun ComprobanteDetailPanel(
     entry: ComprobanteEntry,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onRegisterComprobanteClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -598,6 +599,22 @@ private fun ComprobanteDetailPanel(
                             }
                         }
                     }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = onRegisterComprobanteClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandBlue,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Registrar comprobante")
                 }
             }
 
@@ -769,7 +786,6 @@ fun NotificationsScreen(
             )
         },
         floatingActionButton = {
-            if (mode == HistoryMode.Historial) {
             FloatingActionButton(
                 onClick = { showRequestTypeDialog = true },
                 containerColor = BrandBlue,
@@ -780,7 +796,6 @@ fun NotificationsScreen(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Nueva solicitud"
                 )
-            }
             }
         }
     ) { padding ->
@@ -1071,7 +1086,14 @@ fun NotificationsScreen(
             ) {
                 ComprobanteDetailPanel(
                     entry = entry,
-                    onClose = { detailComprobanteEntry = null }
+                    onClose = { detailComprobanteEntry = null },
+                    onRegisterComprobanteClick = {
+                        detailComprobanteEntry = null
+                        val solicitudId = entry.id.filter(Char::isDigit)
+                        onAddRequestClick(
+                            if (solicitudId.isNotBlank()) "comprobante:$solicitudId" else "comprobante"
+                        )
+                    }
                 )
             }
         }
