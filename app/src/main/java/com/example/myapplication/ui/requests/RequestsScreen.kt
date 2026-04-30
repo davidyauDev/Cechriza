@@ -419,7 +419,7 @@ fun RequestsScreen(
         it.quantity.toIntOrNull()?.let { value -> value > 0 } == true &&
             it.selectedInventoryId != null &&
             it.description.isNotBlank() &&
-            (!it.requiresPreviousProductPhoto || it.hasAttachedPhoto())
+            (isGastoFlow || !it.requiresPreviousProductPhoto || it.hasAttachedPhoto())
     }
     val confirmationSections = buildRequestConfirmationSections(allSections)
     val currentAreaError = optionsErrorByArea[selectedTab.areaId]
@@ -428,7 +428,7 @@ fun RequestsScreen(
             if (isSubmitting) return@launch
             isSubmitting = true
             showConfirmDialog = false
-            val solicitanteUserId = SessionManager.staffId ?: SessionManager.userId
+            val solicitanteUserId = SessionManager.staffId
             if (solicitanteUserId == null || solicitanteUserId <= 0) {
                 isSubmitting = false
                 snackbarHostState.showSnackbar("No se encontro staff_id de sesion. Vuelve a iniciar sesion.")
@@ -442,18 +442,30 @@ fun RequestsScreen(
             )
             val result = withContext(Dispatchers.IO) {
                 if (isEppOnlyFlow) {
-                    submitSolicitudGastoEppRequest(
+                    submitSolicitudGastoGeneralRequest(
                         api = api,
-                        eppSection = eppSection,
+                        sections = listOf(eppSection),
                         solicitanteUserId = solicitanteUserId,
-                        context = context
+                        context = context,
+                        areaId = EPP_AREA_ID,
+                        motivo = "Solicitud EPP - Botas de seguridad",
+                        fallbackPrefix = "bota",
+                        defaultErrorMessage = "No hay botas validas para registrar.",
+                        backendErrorMessage = "No se pudo registrar la solicitud de EPP",
+                        backendSuccessMessage = "Solicitud de EPP registrada correctamente."
                     )
                 } else if (isGastoFlow) {
                     submitSolicitudGastoGeneralRequest(
                         api = api,
                         sections = allSections,
                         solicitanteUserId = solicitanteUserId,
-                        context = context
+                        context = context,
+                        areaId = ALMACEN_SOLICITUD_GENERAL_AREA_ID,
+                        motivo = "Solicitud general de almacen",
+                        fallbackPrefix = "general",
+                        defaultErrorMessage = "No hay items validos para registrar en almacen.",
+                        backendErrorMessage = "No se pudo registrar la solicitud de almacen",
+                        backendSuccessMessage = "Solicitud de almacen registrada correctamente."
                     )
                 } else {
                     submitCompleteRequest(
@@ -640,6 +652,7 @@ fun RequestsScreen(
                             },
                             enabledSubmit = totalItems > 0 && !isSubmitting,
                             isSubmitting = isSubmitting,
+                            isGastoFlow = isGastoFlow,
                             singleItemFlow = isEppOnlyFlow && selectedTab == RequestTab.Epp
                         )
                     }
@@ -867,6 +880,7 @@ private fun RequestForm(
     onSubmit: () -> Unit,
     enabledSubmit: Boolean,
     isSubmitting: Boolean,
+    isGastoFlow: Boolean = false,
     singleItemFlow: Boolean = false
 ) {
     var pendingPhotoIndex by remember { mutableStateOf<Int?>(null) }
@@ -945,6 +959,7 @@ private fun RequestForm(
                             pendingPhotoIndex = index
                             cameraLauncher.launch(null)
                         },
+                        isGastoFlow = isGastoFlow,
                         showValidation = submitAttempted,
                         showAddButton = !singleItemFlow,
                         showDeleteButton = !singleItemFlow,
@@ -1054,89 +1069,17 @@ private suspend fun submitCompleteRequest(
     }
 }
 
-private suspend fun submitSolicitudGastoEppRequest(
-    api: com.example.myapplication.data.remote.network.ApiService,
-    eppSection: RequestSectionState,
-    solicitanteUserId: Int,
-    context: android.content.Context
-): SubmitRequestResult {
-    val validItems = eppSection.items.mapIndexedNotNull { index, item ->
-        val productId = item.selectedInventoryId ?: return@mapIndexedNotNull null
-        val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@mapIndexedNotNull null
-        Triple(index, item, productId to cantidad)
-    }
-
-    if (validItems.isEmpty()) {
-        return SubmitRequestResult(
-            success = false,
-            message = "No hay botas validas para registrar."
-        )
-    }
-
-    return try {
-        val parts = mutableListOf<MultipartBody.Part>()
-        appendSolicitudGastoBaseParts(
-            parts = parts,
-            solicitanteUserId = solicitanteUserId,
-            areaId = EPP_AREA_ID,
-            motivo = "Solicitud EPP - Botas de seguridad"
-        )
-
-        validItems.forEach { (index, item, idCantidad) ->
-            val (productId, cantidad) = idCantidad
-            appendSolicitudGastoDetalleParts(
-                parts = parts,
-                detailIndex = index,
-                idProducto = productId,
-                cantidad = cantidad,
-                precioEstimado = 0.0,
-                precioReal = 0.0,
-                descripcionAdicional = inferBootDescription(item.description)
-            )
-            val archivoPart = buildSolicitudGastoArchivoPart(
-                context = context,
-                item = item,
-                detailIndex = index,
-                fallbackPrefix = "bota"
-            ) ?: return SubmitRequestResult(
-                success = false,
-                message = "Adjunta una imagen o PDF valido (max 10MB) para cada detalle."
-            )
-            parts += archivoPart
-        }
-
-        val response = api.registrarSolicitudGasto(parts)
-        if (!response.isSuccessful) {
-            val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
-            return SubmitRequestResult(
-                success = false,
-                message = backendMessage ?: "No se pudo registrar la solicitud de EPP (${response.code()})."
-            )
-        }
-
-        val bodyObj = response.body()?.asJsonObject
-        val backendSuccess = bodyObj?.get("success").asBooleanOrNull() ?: true
-        val backendMessage = bodyObj?.get("message").asNonBlankStringOrNull()
-            ?: "Solicitud de EPP registrada correctamente."
-
-        if (!backendSuccess) {
-            SubmitRequestResult(success = false, message = backendMessage)
-        } else {
-            SubmitRequestResult(success = true, message = backendMessage)
-        }
-    } catch (e: Exception) {
-        SubmitRequestResult(
-            success = false,
-            message = "Error enviando solicitud de EPP: ${e.message.orEmpty()}"
-        )
-    }
-}
-
 private suspend fun submitSolicitudGastoGeneralRequest(
     api: com.example.myapplication.data.remote.network.ApiService,
     sections: List<RequestSectionState>,
     solicitanteUserId: Int,
-    context: android.content.Context
+    context: android.content.Context,
+    areaId: Int,
+    motivo: String,
+    fallbackPrefix: String,
+    defaultErrorMessage: String,
+    backendErrorMessage: String,
+    backendSuccessMessage: String
 ): SubmitRequestResult {
     val validItems = mutableListOf<Triple<Int, MaterialItemForm, Pair<Int, Int>>>()
     var detailIndex = 0
@@ -1152,7 +1095,7 @@ private suspend fun submitSolicitudGastoGeneralRequest(
     if (validItems.isEmpty()) {
         return SubmitRequestResult(
             success = false,
-            message = "No hay items validos para registrar en almacen."
+            message = defaultErrorMessage
         )
     }
 
@@ -1161,8 +1104,8 @@ private suspend fun submitSolicitudGastoGeneralRequest(
         appendSolicitudGastoBaseParts(
             parts = parts,
             solicitanteUserId = solicitanteUserId,
-            areaId = ALMACEN_SOLICITUD_GENERAL_AREA_ID,
-            motivo = "Solicitud general de almacen"
+            areaId = areaId,
+            motivo = motivo
         )
 
         validItems.forEach { (index, item, idCantidad) ->
@@ -1174,18 +1117,24 @@ private suspend fun submitSolicitudGastoGeneralRequest(
                 cantidad = cantidad,
                 precioEstimado = 0.0,
                 precioReal = 0.0,
-                descripcionAdicional = item.observations.takeIf { it.isNotBlank() } ?: item.description
+                descripcionAdicional = item.observations.takeIf { it.isNotBlank() }
+                    ?: inferBootDescription(item.description)
             )
             val archivoPart = buildSolicitudGastoArchivoPart(
                 context = context,
                 item = item,
                 detailIndex = index,
-                fallbackPrefix = "general"
-            ) ?: return SubmitRequestResult(
-                success = false,
-                message = "Adjunta una imagen o PDF valido (max 10MB) para cada detalle."
+                fallbackPrefix = fallbackPrefix
             )
-            parts += archivoPart
+            if (item.hasAttachedPhoto()) {
+                if (archivoPart == null) {
+                    return SubmitRequestResult(
+                        success = false,
+                        message = "Adjunta una imagen o PDF valido (max 10MB) para cada detalle."
+                    )
+                }
+                parts += archivoPart
+            }
         }
 
         val response = api.registrarSolicitudGasto(parts)
@@ -1193,14 +1142,14 @@ private suspend fun submitSolicitudGastoGeneralRequest(
             val backendMessage = response.errorBody()?.string()?.let { extractBackendMessage(it) }
             return SubmitRequestResult(
                 success = false,
-                message = backendMessage ?: "No se pudo registrar la solicitud de almacen (${response.code()})."
+                message = backendMessage ?: "$backendErrorMessage (${response.code()})."
             )
         }
 
         val bodyObj = response.body()?.asJsonObject
         val backendSuccess = bodyObj?.get("success").asBooleanOrNull() ?: true
         val backendMessage = bodyObj?.get("message").asNonBlankStringOrNull()
-            ?: "Solicitud de almacen registrada correctamente."
+            ?: backendSuccessMessage
 
         if (!backendSuccess) {
             SubmitRequestResult(success = false, message = backendMessage)
@@ -1210,7 +1159,7 @@ private suspend fun submitSolicitudGastoGeneralRequest(
     } catch (e: Exception) {
         SubmitRequestResult(
             success = false,
-            message = "Error enviando solicitud de almacen: ${e.message.orEmpty()}"
+            message = "Error enviando solicitud: ${e.message.orEmpty()}"
         )
     }
 }
@@ -1469,6 +1418,7 @@ private fun MaterialItemCard(
     onObservationsChange: (String) -> Unit,
     onGalleryPhotoClick: () -> Unit,
     onCameraPhotoClick: () -> Unit,
+    isGastoFlow: Boolean = false,
     showValidation: Boolean,
     showAddButton: Boolean = true,
     showDeleteButton: Boolean = true,
@@ -1627,7 +1577,7 @@ private fun MaterialItemCard(
                 photoBitmap = item.photoBitmap,
                 onGalleryClick = onGalleryPhotoClick,
                 onCameraClick = onCameraPhotoClick,
-                isRequired = true,
+                isRequired = !isGastoFlow,
                 requiredError = photoRequiredError
             )
         }
@@ -1806,7 +1756,7 @@ private fun extractInventoryOptionsForArea(
                     return@forEach
                 }
                 val label = obj.get("producto").asNonBlankStringOrNull() ?: extractProductLabel(obj)
-                val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
+                val requiresPhoto = extractRequiresPhotoFlag(obj)
                 if (!label.isNullOrBlank()) {
                     val previous = options[inventoryId]
                     options[inventoryId] = InventoryOption(
@@ -1866,7 +1816,7 @@ private fun collectInventoryOptions(
             val inventoryId = extractInventoryId(obj)
             val productId = obj.get("id_producto").asIntOrNull()
             val label = extractProductLabel(obj)
-            val requiresPhoto = obj.get("requiere_foto_producto_anterior").asBooleanOrNull() == true
+            val requiresPhoto = extractRequiresPhotoFlag(obj)
             val isExcluded =
                 (productId != null && productId in excludedProductIds) ||
                     (inventoryId != null && inventoryId in excludedProductIds)
@@ -1888,19 +1838,22 @@ private fun collectInventoryOptions(
     }
 }
 
-private fun extractInventoryId(obj: JsonObject): Int? {
-    val candidateKeys = listOf(
-        "id_producto",
-        "id_inventario",
-        "id_item",
-        "inventario_id",
-        "id"
+private fun extractRequiresPhotoFlag(obj: JsonObject): Boolean {
+    val keys = listOf(
+        "requiere_foto_producto_anterior",
+        "requiere_foto",
+        "requiere_imagen",
+        "requires_photo",
+        "requires_image",
+        "foto_obligatoria",
+        "imagen_obligatoria"
     )
-    for (key in candidateKeys) {
-        val value = obj.get(key).asIntOrNull()
-        if (value != null) return value
-    }
-    return null
+    return keys.any { key -> obj.get(key).asBooleanOrNull() == true }
+}
+
+private fun extractInventoryId(obj: JsonObject): Int? {
+    // For request payloads we must always send product id, never inventory id.
+    return obj.get("id_producto").asIntOrNull()
 }
 
 private fun extractProductLabel(obj: JsonObject): String? {
@@ -1989,7 +1942,7 @@ private fun DescriptionDropdownField(
                 onValueChange = {},
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onExpandedChange(true) },
+                    .clickable { onExpandedChange(!expanded) },
                 placeholder = { Text("Seleccionar item") },
                 trailingIcon = {
                     IconButton(onClick = { onExpandedChange(!expanded) }) {

@@ -106,6 +106,14 @@ fun AppNavigation(navController: NavHostController) {
     val repository = AttendanceRepository(userPreferences, context, dao)
     val factory = AttendanceViewModelFactory(context, repository)
     val attendanceViewModel: AttendanceViewModel = viewModel(factory = factory)
+    val navigateToNotifications: () -> Unit = {
+        val popped = navController.popBackStack("notifications", inclusive = false)
+        if (!popped) {
+            navController.navigate("notifications") {
+                launchSingleTop = true
+            }
+        }
+    }
 
     NavHost(navController = navController, startDestination = "splash") {
         composable("splash") {
@@ -158,14 +166,9 @@ fun AppNavigation(navController: NavHostController) {
 
         composable("requests_form") {
             RequestsScreen(
-                onHomeClick = { navController.popBackStack() },
-                onNotificationsClick = { navController.navigate("notifications") },
-                onRegisterSuccess = {
-                    navController.navigate("notifications") {
-                        popUpTo("requests_form") { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
+                onHomeClick = navigateToNotifications,
+                onNotificationsClick = navigateToNotifications,
+                onRegisterSuccess = navigateToNotifications,
                 initialPreset = null
             )
         }
@@ -173,14 +176,9 @@ fun AppNavigation(navController: NavHostController) {
         composable("requests_form/{preset}") { backStackEntry ->
             val preset = backStackEntry.arguments?.getString("preset")
             RequestsScreen(
-                onHomeClick = { navController.popBackStack() },
-                onNotificationsClick = { navController.navigate("notifications") },
-                onRegisterSuccess = {
-                    navController.navigate("notifications") {
-                        popUpTo("requests_form") { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
+                onHomeClick = navigateToNotifications,
+                onNotificationsClick = navigateToNotifications,
+                onRegisterSuccess = navigateToNotifications,
                 initialPreset = preset
             )
         }
@@ -197,36 +195,26 @@ fun AppNavigation(navController: NavHostController) {
             val solicitudIdArg = backStackEntry.arguments?.getInt("solicitudId") ?: -1
             RegistrarComprobanteScreen(
                 initialSolicitudGastoId = solicitudIdArg.takeIf { it > 0 },
-                onBackClick = { navController.popBackStack() },
+                onBackClick = navigateToNotifications,
                 onUnauthorized = {
                     navController.navigate("login") {
                         popUpTo("main") { inclusive = true }
                     }
                 },
-                onSaved = {
-                    navController.navigate("notifications") {
-                        popUpTo("comprobante_form") { inclusive = true }
-                        launchSingleTop = true
-                    }
-                }
+                onSaved = navigateToNotifications
             )
         }
 
         composable("comprobante_form") {
             RegistrarComprobanteScreen(
                 initialSolicitudGastoId = null,
-                onBackClick = { navController.popBackStack() },
+                onBackClick = navigateToNotifications,
                 onUnauthorized = {
                     navController.navigate("login") {
                         popUpTo("main") { inclusive = true }
                     }
                 },
-                onSaved = {
-                    navController.navigate("notifications") {
-                        popUpTo("comprobante_form") { inclusive = true }
-                        launchSingleTop = true
-                    }
-                }
+                onSaved = navigateToNotifications
             )
         }
 
@@ -268,7 +256,11 @@ fun BottomNavScreen(navController: NavHostController, attendanceViewModel: Atten
             modifier = Modifier.padding(paddingValues),
             attendanceViewModel = attendanceViewModel,
             onNavigateHome = { selectedIndex = 0 },
-            onNavigateNotifications = { navController.navigate("notifications") },
+            onNavigateNotifications = {
+                navController.navigate("notifications") {
+                    launchSingleTop = true
+                }
+            },
             onLogout = {
                 navController.navigate("login") {
                     popUpTo("main") { inclusive = true }

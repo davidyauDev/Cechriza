@@ -84,13 +84,16 @@ private enum class HistoryMode(val label: String) {
 
 private enum class ComprobanteSource(val label: String) {
     Gastos("Otros"),
-    Rrhh("EPPs")
+    Rrhh("Botas")
 }
 
 private data class ComprobanteEntry(
     val id: String,
     val title: String,
     val subtitle: String,
+    val seguimientoComentario: String?,
+    val estadoDetalleId: Int?,
+    val statusCode: String?,
     val status: String,
     val date: String,
     val amount: String?,
@@ -112,8 +115,8 @@ private enum class RequestStartOption(
     val description: String
 ) {
     Epps(
-        "Solicitud EPPs",
-        "Para solicitar solo botas de seguridad."
+        "Solicitud Botas de Seguridad",
+        "Area encargada SSOMA"
     ),
     Almacen(
         "Solicitud Almacen",
@@ -156,18 +159,46 @@ private fun statusChipStyle(status: RequestStatus): StatusChipStyle {
     }
 }
 
+private fun comprobanteStatusChipStyle(statusCode: String?, statusLabel: String): StatusChipStyle {
+    val code = statusCode?.trim()?.lowercase().orEmpty()
+    val label = statusLabel.trim().lowercase()
+
+    return when {
+        code == "pendiente_rrhh" || ("pendiente" in label && "rrhh" in label) -> StatusChipStyle(
+            background = Color(0xFFEEF4FF),
+            border = Color(0xFFB2CCFF),
+            foreground = Color(0xFF1D4ED8)
+        )
+        "pendiente" in code || "pendiente" in label -> StatusChipStyle(
+            background = Color(0xFFFFF7E8),
+            border = Color(0xFFF9D58A),
+            foreground = Color(0xFF9A6700)
+        )
+        "aprob" in code || "aprob" in label -> StatusChipStyle(
+            background = Color(0xFFECFDF3),
+            border = Color(0xFFABEFC6),
+            foreground = Color(0xFF067647)
+        )
+        "rechaz" in code || "rechaz" in label -> StatusChipStyle(
+            background = Color(0xFFFEF3F2),
+            border = Color(0xFFFDA29B),
+            foreground = Color(0xFFB42318)
+        )
+        else -> StatusChipStyle(
+            background = Color(0xFFF4F6FA),
+            border = Color(0xFFD0D5DD),
+            foreground = Color(0xFF344054)
+        )
+    }
+}
+
 private data class RequestItemLine(
     val id: String,
     val product: String,
-    val area: String,
     val requested: Int,
-    val approved: Int,
-    val attended: Int,
     val status: RequestStatus,
     val statusDescription: String,
-    val reason: String,
-    val stock: Int,
-    val registeredAt: String
+    val approvedAt: String
 )
 
 private data class RequestEntry(
@@ -223,6 +254,28 @@ private fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             ?: buildStaffName(obj.getObjectOrNull("staff"))
             ?: "Solicitante"
         val tipoSolicitud = extractTipoSolicitud(obj) ?: "Solicitud"
+        val detallesArray = obj.getAsJsonArray("detalles")
+        val items = detallesArray
+            ?.mapNotNull { detailElement ->
+                if (!detailElement.isJsonObject) return@mapNotNull null
+                val detail = detailElement.asJsonObject
+                val detailStatusDescription = detail.get("estado").asNonBlankStringOrNull()
+                    ?: statusDescription
+                val detailStatus = resolveRequestStatus(detailStatusDescription)
+                val approvedAt = detail.get("fecha_atencion").asNonBlankStringOrNull()
+                    ?: detail.get("fecha_cierre").asNonBlankStringOrNull()
+                    ?: "--"
+
+                RequestItemLine(
+                    id = "#${detail.get("id_detalle_solicitud").asIntOrZero()}",
+                    product = detail.get("producto").asNonBlankStringOrNull() ?: "Producto",
+                    requested = detail.get("solicitado").asIntOrZero(),
+                    status = detailStatus,
+                    statusDescription = detailStatusDescription,
+                    approvedAt = approvedAt
+                )
+            }
+            .orEmpty()
 
         RequestEntry(
             solicitudId = idSolicitud,
@@ -235,7 +288,7 @@ private fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             justification = obj.get("justificacion").asNonBlankStringOrNull() ?: "--",
             status = status,
             statusDescription = statusDescription,
-            items = emptyList()
+            items = items
         )
     }
 }
@@ -317,8 +370,12 @@ private fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry>
         val area = solicitud?.get("area").asNonBlankStringOrNull().orEmpty()
         val workflow = obj.get("workflow_state").asNonBlankStringOrNull().orEmpty()
         val subtitle = listOf(solicitante, area, workflow).filter { it.isNotBlank() }.joinToString(" - ")
-        val status = obj.get("workflow_state").asNonBlankStringOrNull()
-            ?: solicitud?.get("estado").asNonBlankStringOrNull()
+        val estadoDetalleObj = solicitud?.getObjectOrNull("estado_detalle")
+            ?: obj.getObjectOrNull("estado_detalle")
+        val estadoDetalleId = estadoDetalleObj?.get("id").asIntOrNull()
+        val statusCode = estadoDetalleObj?.get("codigo").asNonBlankStringOrNull()
+        val status = estadoDetalleObj?.get("nombre").asNonBlankStringOrNull()
+            ?: obj.get("workflow_state").asNonBlankStringOrNull()
             ?: "pendiente"
         val date = solicitud?.get("fecha_solicitud").asNonBlankStringOrNull()
             ?: obj.get("fecha_registro").asNonBlankStringOrNull()
@@ -331,6 +388,12 @@ private fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry>
         val areaId = solicitud?.get("id_area").asIntOrNull()
             ?: obj.get("id_area").asIntOrNull()
         val detailArray = obj.getAsJsonArray("solicitud_gasto_detalles")
+        val seguimientoComentario = obj.getAsJsonArray("seguimientos_solicitud_gasto")
+            ?.mapNotNull { seguimiento ->
+                if (!seguimiento.isJsonObject) return@mapNotNull null
+                seguimiento.asJsonObject.get("comentario").asNonBlankStringOrNull()
+            }
+            ?.lastOrNull()
         val details = detailArray?.mapIndexedNotNull { detailIndex, detailElement ->
             if (!detailElement.isJsonObject) return@mapIndexedNotNull null
             val detail = detailElement.asJsonObject
@@ -350,6 +413,9 @@ private fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry>
             id = "#$id",
             title = motivo,
             subtitle = subtitle,
+            seguimientoComentario = seguimientoComentario,
+            estadoDetalleId = estadoDetalleId,
+            statusCode = statusCode,
             status = status,
             date = date,
             amount = monto?.let { "S/ $it" },
@@ -390,21 +456,17 @@ private fun parseRequestDetailEntry(root: JsonElement?, fallback: RequestEntry):
             val detailStatusDescription = detail.get("estado").asNonBlankStringOrNull()
                 ?: statusDescription
             val detailStatus = resolveRequestStatus(detailStatusDescription)
+            val approvedAt = detail.get("fecha_atencion").asNonBlankStringOrNull()
+                ?: detail.get("fecha_cierre").asNonBlankStringOrNull()
+                ?: "--"
 
             RequestItemLine(
                 id = "#${detail.get("id_detalle_solicitud").asIntOrZero()}",
                 product = detail.get("producto").asNonBlankStringOrNull() ?: "Producto",
-                area = detail.get("area").asNonBlankStringOrNull() ?: "--",
                 requested = detail.get("solicitado").asIntOrZero(),
-                approved = detail.get("aprobado").asIntOrZero(),
-                attended = detail.get("cantidad_atendida").asIntOrZero(),
                 status = detailStatus,
                 statusDescription = detailStatusDescription,
-                reason = detail.get("motivo").asNonBlankStringOrNull()
-                    ?: detail.get("observacion_atencion").asNonBlankStringOrNull()
-                    ?: "--",
-                stock = detail.get("stock_actual").asIntOrZero(),
-                registeredAt = detail.get("fecha_registro").asNonBlankStringOrNull() ?: "--"
+                approvedAt = approvedAt
             )
         }
         .orEmpty()
@@ -429,6 +491,7 @@ private fun ComprobanteListCard(
     entry: ComprobanteEntry,
     onClick: () -> Unit
 ) {
+    val chipStyle = comprobanteStatusChipStyle(entry.statusCode, entry.status)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -452,12 +515,19 @@ private fun ComprobanteListCard(
                     color = BrandText,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = entry.status,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = BrandBlueDark,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = chipStyle.background,
+                    border = BorderStroke(1.dp, chipStyle.border)
+                ) {
+                    Text(
+                        text = entry.status,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = chipStyle.foreground,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             Text(
@@ -470,6 +540,14 @@ private fun ComprobanteListCard(
             if (entry.subtitle.isNotBlank()) {
                 Text(
                     text = entry.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+
+            entry.seguimientoComentario?.let { comentario ->
+                Text(
+                    text = comentario,
                     style = MaterialTheme.typography.bodySmall,
                     color = BrandMuted
                 )
@@ -585,36 +663,26 @@ private fun ComprobanteDetailPanel(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BrandMuted
                             )
-                            Text(
-                                text = "Ruta: ${item.rutaImagen}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandMuted
-                            )
-                            if (item.urlImagen != "--") {
-                                Text(
-                                    text = "URL: ${item.urlImagen}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
-                            }
                         }
                     }
                 }
             }
 
-            item {
-                Button(
-                    onClick = onRegisterComprobanteClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandBlue,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("Registrar comprobante")
+            if (entry.estadoDetalleId == 9) {
+                item {
+                    Button(
+                        onClick = onRegisterComprobanteClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BrandBlue,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Registrar comprobante")
+                    }
                 }
             }
 
@@ -649,6 +717,7 @@ fun NotificationsScreen(
     var isLoadingComprobantes by remember { mutableStateOf(false) }
     var comprobantesError by remember { mutableStateOf<String?>(null) }
     var reloadComprobantesTick by remember { mutableStateOf(0) }
+    var reloadRequestsTick by remember { mutableStateOf(0) }
     var requests by remember { mutableStateOf<List<RequestEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var isDetailLoading by remember { mutableStateOf(false) }
@@ -662,44 +731,11 @@ fun NotificationsScreen(
     val scope = rememberCoroutineScope()
 
     fun openDetail(entry: RequestEntry) {
-        scope.launch {
-            if (isDetailLoading) return@launch
-            selectedId = entry.id
-            isDetailLoading = true
-            try {
-                val tokenProvider = { SessionManager.token }
-                val api = RetrofitClient.apiWithToken(tokenProvider)
-                val response = withContext(Dispatchers.IO) {
-                    api.getSolicitudById(entry.solicitudId)
-                }
-
-                if (response.isSuccessful) {
-                    val detailed = withContext(Dispatchers.Default) {
-                        parseRequestDetailEntry(response.body(), entry)
-                    }
-                    if (detailed != null) {
-                        detailEntry = detailed
-                    } else {
-                        detailEntry = entry
-                        snackbarHostState.showSnackbar("No se pudo procesar el detalle de la solicitud.")
-                    }
-                } else if (response.code() == 404) {
-                    detailEntry = null
-                    snackbarHostState.showSnackbar("Solicitud no encontrada.")
-                } else {
-                    detailEntry = null
-                    snackbarHostState.showSnackbar("Error al consultar detalle (${response.code()}).")
-                }
-            } catch (_: Exception) {
-                detailEntry = null
-                snackbarHostState.showSnackbar("Sin conexion para consultar detalle.")
-            } finally {
-                isDetailLoading = false
-            }
-        }
+        selectedId = entry.id
+        detailEntry = entry
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadRequestsTick) {
         isLoading = true
         errorMessage = null
         val solicitanteUserId = SessionManager.staffId ?: SessionManager.userId
@@ -720,6 +756,7 @@ fun NotificationsScreen(
                     parseRequestEntries(response.body())
                 }
                 selectedId = requests.firstOrNull()?.id
+                detailEntry = null
             } else {
                 errorMessage = "No se pudo cargar solicitudes (${response.code()})"
             }
@@ -962,106 +999,118 @@ fun NotificationsScreen(
                         }
                     }
                 }
-            } else when {
-                isLoading -> {
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.width(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = BrandBlue
-                                )
-                                Text(
-                                    text = "Cargando solicitudes...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = BrandText
-                                )
-                            }
+            } else {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(onClick = { reloadRequestsTick += 1 }) {
+                            Text("Recargar")
                         }
                     }
                 }
-
-                !errorMessage.isNullOrBlank() -> {
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandBorder)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                when {
+                    isLoading -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
                             ) {
-                                Text(
-                                    text = "No se pudo cargar el historial",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = BrandText,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = errorMessage.orEmpty(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.width(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = BrandBlue
+                                    )
+                                    Text(
+                                        text = "Cargando solicitudes...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = BrandText
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                requests.isEmpty() -> {
-                    item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandBorder)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    !errorMessage.isNullOrBlank() -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
                             ) {
-                                Text(
-                                    text = "Sin solicitudes",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = BrandText,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Aun no hay registros para este usuario.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "No se pudo cargar el historial",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = BrandText,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = errorMessage.orEmpty(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                else -> {
-                    items(requests, key = { it.id }) { entry ->
-                        RequestListCard(
-                            entry = entry,
-                            selected = entry.id == selectedId,
-                            onClick = {
-                                openDetail(entry)
+                    requests.isEmpty() -> {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(22.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Sin solicitudes",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = BrandText,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Aun no hay registros para este usuario.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BrandMuted
+                                    )
+                                }
                             }
-                        )
+                        }
+                    }
+
+                    else -> {
+                        items(requests, key = { it.id }) { entry ->
+                            RequestListCard(
+                                entry = entry,
+                                selected = entry.id == selectedId,
+                                onClick = {
+                                    openDetail(entry)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -1096,10 +1145,6 @@ fun NotificationsScreen(
                     }
                 )
             }
-        }
-
-        if (isDetailLoading) {
-            DetailLoadingSwal()
         }
 
         if (showRequestTypeDialog) {
@@ -1334,67 +1379,11 @@ private fun RequestDetailPanel(
                             color = BrandText,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = "Items asociados a la solicitud seleccionada",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandMuted
-                        )
                     }
                     StatusChip(
                         status = entry.status,
                         labelOverride = entry.statusDescription
                     )
-                }
-            }
-
-            item {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = BrandSurface,
-                    border = BorderStroke(1.dp, BrandBorder)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "Solicitante",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandMuted,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = entry.requester,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = BrandText,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = entry.email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandMuted
-                        )
-                    }
-                }
-            }
-
-            item {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = BrandSurface,
-                    border = BorderStroke(1.dp, BrandBorder)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "Registro",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandMuted,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = entry.time,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = BrandText,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
             }
 
@@ -1463,65 +1452,15 @@ private fun RequestItemCard(item: RequestItemLine) {
                     labelOverride = item.statusDescription
                 )
             }
-
             Text(
-                text = item.area,
-                style = MaterialTheme.typography.bodySmall,
-                color = BrandMuted,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SmallMetric("Solic.", item.requested.toString(), Modifier.weight(1f))
-                SmallMetric("Aprob.", item.approved.toString(), Modifier.weight(1f))
-                SmallMetric("Atend.", item.attended.toString(), Modifier.weight(1f))
-            }
-
-            Text(
-                text = item.reason,
+                text = "Cantidad: ${item.requested}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = BrandText
             )
             Text(
-                text = item.registeredAt,
+                text = "Fecha aprobacion: ${item.approvedAt}",
                 style = MaterialTheme.typography.bodySmall,
                 color = BrandMuted
-            )
-        }
-    }
-}
-
-@Composable
-private fun SmallMetric(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, BrandBorder)
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = BrandMuted,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleSmall,
-                color = BrandText,
-                fontWeight = FontWeight.Bold
             )
         }
     }

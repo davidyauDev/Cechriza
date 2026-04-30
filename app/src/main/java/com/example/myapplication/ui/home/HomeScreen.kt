@@ -196,7 +196,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val userViewModel: UserViewModel = viewModel()
     val userName by userViewModel.userName.collectAsState()
-    val userEmail by userViewModel.userEmail.collectAsState()
     val fullName = remember(userName) {
         userName.trim().takeIf { it.isNotBlank() } ?: "Usuario"
     }
@@ -523,6 +522,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Surface(
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
                         color = Color.White,
                         border = BorderStroke(1.dp, BrandBorder)
@@ -551,57 +551,11 @@ fun HomeScreen(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Cuenta activa",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = BrandMuted
-                                    )
-                                    Text(
                                         text = fullName,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = BrandText,
                                         fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = userEmail.takeIf { it.isNotBlank() } ?: " ",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = BrandMuted,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = BrandBlueSoft,
-                                border = BorderStroke(1.dp, BrandBorder)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = "Estado",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = BrandMuted
-                                        )
-                                        Text(
-                                            text = "Lista para usar",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = BrandBlueDark,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Text(
-                                        text = "●",
-                                        color = BrandBlueDark,
-                                        fontWeight = FontWeight.SemiBold
+                                        maxLines = 2
                                     )
                                 }
                             }
