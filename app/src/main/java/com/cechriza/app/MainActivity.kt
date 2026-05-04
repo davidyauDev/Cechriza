@@ -12,11 +12,25 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -25,6 +39,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -43,6 +58,7 @@ import com.cechriza.app.ui.Attendance.AttendanceScreen
 import com.cechriza.app.ui.Attendance.AttendanceViewModel
 import com.cechriza.app.ui.Attendance.AttendanceViewModelFactory
 import com.cechriza.app.ui.camera.CameraScreen
+import com.cechriza.app.ui.account.AccountScreen
 import com.cechriza.app.ui.home.HomeScreen
 import com.cechriza.app.ui.home.RoutesScreen
 import com.cechriza.app.ui.login.LoginScreen
@@ -54,7 +70,14 @@ import androidx.compose.ui.Alignment
 import androidx.work.*
 import com.cechriza.attendance.R
 import com.cechriza.app.data.preferences.SessionManager
+import com.cechriza.app.ui.home.BrandBlue
+import com.cechriza.app.ui.home.BrandBorder
+import com.cechriza.app.ui.home.BrandMuted
+import com.cechriza.app.ui.home.BrandSurface
+import com.cechriza.app.ui.home.BrandText
 import com.cechriza.app.work.SyncAttendancesWorker
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
@@ -179,6 +202,17 @@ fun AppNavigation(navController: NavHostController) {
             RoutesScreen(navController = navController)
         }
 
+        composable("account") {
+            AccountScreen(
+                onNotificationsClick = {},
+                onLogoutClick = {
+                    navController.navigate("login") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable("solicitudes_list") {
             SolicitudListScreen(
                 navController = navController,
@@ -247,6 +281,7 @@ fun AppNavigation(navController: NavHostController) {
 @Composable
 fun BottomNavScreen(navController: NavHostController, attendanceViewModel: AttendanceViewModel) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showWelcomePopup by rememberSaveable { mutableStateOf(true) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val routesWithBottomBar = listOf("main")
@@ -274,7 +309,81 @@ fun BottomNavScreen(navController: NavHostController, attendanceViewModel: Atten
                 selectedIndex = 2
             }
         )
+
+        if (showWelcomePopup) {
+            LaunchWelcomePopup(
+                onDismiss = { showWelcomePopup = false },
+                onGoSolicitudes = {
+                    selectedIndex = 2
+                    showWelcomePopup = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun LaunchWelcomePopup(
+    onDismiss: () -> Unit,
+    onGoSolicitudes: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BrandSurface,
+        shape = RoundedCornerShape(24.dp),
+        title = {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Bienvenido a Cechriza",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = BrandText,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Gestiona tus solicitudes en segundos",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = BrandMuted
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cerrar",
+                        tint = BrandMuted
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(color = androidx.compose.ui.graphics.Color.White, shape = RoundedCornerShape(14.dp))
+                        .border(1.dp, BrandBorder, RoundedCornerShape(14.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = "Crea, revisa y sigue el estado de tus solicitudes desde un solo lugar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = BrandText
+                    )
+                }
+                Image(
+                    painter = painterResource(id = R.drawable.logo_cechriza),
+                    contentDescription = "Logo Cechriza",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(84.dp)
+                        .scale(0.9f)
+                        .clickable { onGoSolicitudes() }
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {}
+    )
 }
 
 @Composable

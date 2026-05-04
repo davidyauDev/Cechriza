@@ -594,6 +594,39 @@ fun HomeScreen(
                         }
                     )
 
+                    DrawerCardItem(
+                        title = "Cuenta",
+                        subtitle = "Perfil y cierre de sesión",
+                        badge = "C",
+                        selected = selectedDrawerItem == "Account",
+                        onClick = {
+                            selectedDrawerItem = "Account"
+                            drawerCoroutineScope.launch {
+                                drawerState.close()
+                                navController.navigate("account")
+                            }
+                        }
+                    )
+
+                    DrawerCardItem(
+                        title = "Cerrar sesión",
+                        subtitle = "Salir de la aplicación",
+                        badge = "X",
+                        selected = false,
+                        accent = BrandOrange,
+                        accentSoft = BrandOrangeSoft,
+                        onClick = {
+                            SessionManager.clear(context)
+                            userViewModel.clearUser()
+                            drawerCoroutineScope.launch {
+                                drawerState.close()
+                                navController.navigate("login") {
+                                    popUpTo("main") { inclusive = true }
+                                }
+                            }
+                        }
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
