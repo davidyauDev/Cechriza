@@ -2,7 +2,7 @@ package com.cechriza.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import com.cechriza.app.data.local.model.NavItem
@@ -12,6 +12,6 @@ object NavItemList {
         NavItem("Inicio", Icons.Default.Home),
         NavItem("Asist.", Icons.Default.Person),
         NavItem("Sol.", Icons.Default.Menu),
-        NavItem("Account", Icons.Default.AccountCircle)
+        NavItem("Rutas", Icons.Default.Map)
     )
 }

@@ -29,7 +29,6 @@ import com.cechriza.app.ui.navigation.NavItemList
 import com.cechriza.app.ui.Attendance.AttendanceScreen
 import com.cechriza.app.ui.Attendance.AttendanceViewModel
 import com.cechriza.app.ui.Attendance.AttendanceViewModelFactory
-import com.cechriza.app.ui.account.AccountScreen
 import com.cechriza.app.ui.camera.CameraScreen
 import com.cechriza.app.ui.home.HomeScreen
 import com.cechriza.app.ui.home.RoutesScreen
@@ -239,11 +238,6 @@ fun BottomNavScreen(navController: NavHostController, attendanceViewModel: Atten
                 navController.navigate("notifications") {
                     launchSingleTop = true
                 }
-            },
-            onLogout = {
-                navController.navigate("login") {
-                    popUpTo("main") { inclusive = true }
-                }
             }
         )
     }
@@ -256,7 +250,6 @@ fun ContentScreen(
     attendanceViewModel: AttendanceViewModel,
     onNavigateHome: () -> Unit,
     onNavigateNotifications: () -> Unit,
-    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (selectedIndex) {
@@ -284,10 +277,9 @@ fun ContentScreen(
                 }
             }
         )
-        3 -> AccountScreen(
-            modifier = modifier,
-            onNotificationsClick = onNavigateNotifications,
-            onLogoutClick = onLogout
+        3 -> RoutesScreen(
+            navController = navController,
+            modifier = modifier
         )
     }
 }
