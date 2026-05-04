@@ -1,4 +1,4 @@
-package com.cechriza.app.ui.requests
+package com.cechriza.app.ui.solicitudes.create
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -79,6 +79,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.cechriza.app.data.model.solicitudes.SolicitudBaseFields
+import com.cechriza.app.data.model.solicitudes.SubmitRequestResult
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandBlueDark
 import com.cechriza.app.ui.home.BrandBlueSoft
@@ -89,7 +91,7 @@ import com.cechriza.app.ui.home.BrandText
 import com.cechriza.app.ui.home.BrandMuted
 import com.cechriza.app.ui.home.AppHeader
 import com.cechriza.app.data.preferences.SessionManager
-import com.cechriza.app.data.remote.network.RetrofitClient
+import com.cechriza.app.data.remote.solicitudes.SolicitudesRemoteDataSource
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -193,19 +195,6 @@ private data class MaterialItemForm(
     val photoBitmap: Bitmap? = null
 )
 
-private data class SubmitRequestResult(
-    val success: Boolean,
-    val message: String
-)
-
-private data class SolicitudBaseFields(
-    val justificacion: String,
-    val fechaNecesaria: String,
-    val idDireccionEntrega: String,
-    val esPedidoCompra: Boolean,
-    val ubicacion: String
-)
-
 private data class RequestConfirmationItem(
     val quantity: String,
     val description: String,
@@ -265,7 +254,7 @@ private fun defaultSolicitudBaseFields(
 }
 
 @Composable
-fun RequestsScreen(
+fun SolicitudCreateScreen(
     modifier: Modifier = Modifier,
     onHomeClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
@@ -368,10 +357,8 @@ fun RequestsScreen(
         optionsErrorByArea.remove(targetAreaId)
 
         try {
-            val tokenProvider = { SessionManager.token }
-            val api = RetrofitClient.apiWithToken(tokenProvider)
             val response = withContext(Dispatchers.IO) {
-                api.getInventarioProductos(targetResponsable)
+                SolicitudesRemoteDataSource.getInventarioProductos(targetResponsable)
             }
 
             if (response.isSuccessful) {
@@ -433,8 +420,7 @@ fun RequestsScreen(
                 snackbarHostState.showSnackbar("No se encontro staff_id de sesion. Vuelve a iniciar sesion.")
                 return@launch
             }
-            val tokenProvider = { SessionManager.token }
-            val api = RetrofitClient.apiWithToken(tokenProvider)
+                val api = SolicitudesRemoteDataSource.authenticatedApi()
             val baseFields = defaultSolicitudBaseFields(
                 deliveryZone = selectedDeliveryZone,
                 esPedidoCompra = isPurchaseRequest
@@ -497,7 +483,7 @@ fun RequestsScreen(
             AppHeader(
                 title = "Solicitudes",
                 showBackButton = true,
-                showNotificationButton = true,
+                showNotificationButton = false,
                 onBackClick = onHomeClick,
                 onNotificationClick = onNotificationsClick,
             )
@@ -2039,4 +2025,5 @@ private fun DescriptionDropdownField(
         }
     }
 }
+
 

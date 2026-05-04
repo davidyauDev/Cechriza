@@ -174,9 +174,9 @@ fun RoutesScreen(
                 AppHeader(
                     title = headerTitle,
                     subtitle = totalRutas?.let { "$it rutas disponibles" } ?: "Resumen de recorridos",
-                    showBackButton = true,
+                    showBackButton = false,
                     onBackClick = { navController.popBackStack("main", false) },
-                    showNotificationButton = true,
+                    showNotificationButton = false,
                     onNotificationClick = { navController.navigate("notifications") }
                 )
 

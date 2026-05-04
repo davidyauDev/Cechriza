@@ -5,13 +5,26 @@ import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -33,13 +46,13 @@ import com.cechriza.app.ui.camera.CameraScreen
 import com.cechriza.app.ui.home.HomeScreen
 import com.cechriza.app.ui.home.RoutesScreen
 import com.cechriza.app.ui.login.LoginScreen
-import com.cechriza.app.ui.notifications.NotificationsScreen
-import com.cechriza.app.ui.requests.RequestsScreen
+import com.cechriza.app.ui.solicitudes.create.SolicitudCreateScreen
+import com.cechriza.app.ui.solicitudes.list.SolicitudListScreen
 import kotlinx.coroutines.delay
-import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.work.*
+import com.cechriza.attendance.R
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.work.SyncAttendancesWorker
 import java.util.concurrent.TimeUnit
@@ -82,16 +95,44 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SplashScreen(onReady: (Boolean) -> Unit, userPreferences: UserPreferences) {
-    // Simple composable that reads the stored token and signals readiness
     val token by userPreferences.userToken.collectAsState(initial = "")
+    val infiniteTransition = rememberInfiniteTransition(label = "splash-transition")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.015f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "logo-scale"
+    )
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "logo-alpha"
+    )
+
     LaunchedEffect(token) {
-        // small delay to show splash if needed
-        delay(300)
+        delay(1200)
         onReady(token.isNotEmpty())
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Text(text = "Cargando...", modifier = Modifier.align(Alignment.Center))
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.logo_cechriza),
+            contentDescription = "Logo Cechriza",
+            modifier = Modifier
+                .size(170.dp)
+                .scale(scale)
+                .alpha(alpha)
+        )
     }
 }
 
@@ -104,13 +145,8 @@ fun AppNavigation(navController: NavHostController) {
     val repository = AttendanceRepository(userPreferences, context, dao)
     val factory = AttendanceViewModelFactory(context, repository)
     val attendanceViewModel: AttendanceViewModel = viewModel(factory = factory)
-    val navigateToNotifications: () -> Unit = {
-        val popped = navController.popBackStack("notifications", inclusive = false)
-        if (!popped) {
-            navController.navigate("notifications") {
-                launchSingleTop = true
-            }
-        }
+    val returnToPrevious: () -> Unit = {
+        navController.popBackStack()
     }
 
     NavHost(navController = navController, startDestination = "splash") {
@@ -143,8 +179,8 @@ fun AppNavigation(navController: NavHostController) {
             RoutesScreen(navController = navController)
         }
 
-        composable("notifications") {
-            NotificationsScreen(
+        composable("solicitudes_list") {
+            SolicitudListScreen(
                 navController = navController,
                 showBackButton = true,
                 onAddRequestClick = { preset ->
@@ -156,27 +192,27 @@ fun AppNavigation(navController: NavHostController) {
                             navController.navigate("comprobante_form")
                         }
                     } else {
-                        navController.navigate("requests_form/$preset")
+                        navController.navigate("solicitudes_create/$preset")
                     }
                 }
             )
         }
 
-        composable("requests_form") {
-            RequestsScreen(
-                onHomeClick = navigateToNotifications,
-                onNotificationsClick = navigateToNotifications,
-                onRegisterSuccess = navigateToNotifications,
+        composable("solicitudes_create") {
+            SolicitudCreateScreen(
+                onHomeClick = returnToPrevious,
+                onNotificationsClick = returnToPrevious,
+                onRegisterSuccess = returnToPrevious,
                 initialPreset = null
             )
         }
 
-        composable("requests_form/{preset}") { backStackEntry ->
+        composable("solicitudes_create/{preset}") { backStackEntry ->
             val preset = backStackEntry.arguments?.getString("preset")
-            RequestsScreen(
-                onHomeClick = navigateToNotifications,
-                onNotificationsClick = navigateToNotifications,
-                onRegisterSuccess = navigateToNotifications,
+            SolicitudCreateScreen(
+                onHomeClick = returnToPrevious,
+                onNotificationsClick = returnToPrevious,
+                onRegisterSuccess = returnToPrevious,
                 initialPreset = preset
             )
         }
@@ -210,7 +246,7 @@ fun AppNavigation(navController: NavHostController) {
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun BottomNavScreen(navController: NavHostController, attendanceViewModel: AttendanceViewModel) {
-    var selectedIndex by remember { mutableIntStateOf(0) }
+    var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val routesWithBottomBar = listOf("main")
@@ -234,10 +270,8 @@ fun BottomNavScreen(navController: NavHostController, attendanceViewModel: Atten
             modifier = Modifier.padding(paddingValues),
             attendanceViewModel = attendanceViewModel,
             onNavigateHome = { selectedIndex = 0 },
-            onNavigateNotifications = {
-                navController.navigate("notifications") {
-                    launchSingleTop = true
-                }
+            onNavigateSolicitudList = {
+                selectedIndex = 2
             }
         )
     }
@@ -249,7 +283,7 @@ fun ContentScreen(
     navController: NavHostController,
     attendanceViewModel: AttendanceViewModel,
     onNavigateHome: () -> Unit,
-    onNavigateNotifications: () -> Unit,
+    onNavigateSolicitudList: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (selectedIndex) {
@@ -258,9 +292,9 @@ fun ContentScreen(
             attendanceViewModel = attendanceViewModel,
             modifier = modifier,
             onHomeClick = onNavigateHome,
-            onNotificationsClick = onNavigateNotifications
+            onNotificationsClick = onNavigateSolicitudList
         )
-        2 -> NotificationsScreen(
+        2 -> SolicitudListScreen(
             navController = navController,
             modifier = modifier,
             showBackButton = false,
@@ -273,7 +307,7 @@ fun ContentScreen(
                         navController.navigate("comprobante_form")
                     }
                 } else {
-                    navController.navigate("requests_form/$preset")
+                    navController.navigate("solicitudes_create/$preset")
                 }
             }
         )

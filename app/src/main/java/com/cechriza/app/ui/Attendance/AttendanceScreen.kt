@@ -202,8 +202,8 @@ fun AttendanceScreen(
                         .fillMaxWidth()
                         .height(72.dp)
                         .zIndex(1f),
-                    showBackButton = true,
-                    showNotificationButton = true,
+                    showBackButton = false,
+                    showNotificationButton = false,
                     onBackClick = onHomeClick,
                     onNotificationClick = onNotificationsClick
                 )
