@@ -52,7 +52,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cechriza.attendance.R
+import com.attendace.app.R
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.data.remote.network.RetrofitClient
 import com.cechriza.app.data.repository.AuthRepository

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -190,7 +191,7 @@ fun SolicitudListScreen(
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar el historial", uiState.requestsError.orEmpty()) }
                     uiState.requests.isEmpty() -> item { MessageCard("Sin solicitudes", "Aun no hay registros para este usuario.") }
                     else -> {
-                        items(uiState.requests, key = { it.id }) { entry ->
+                        itemsIndexed(uiState.requests, key = { index, entry -> "${entry.id}-$index" }) { _, entry ->
                             RequestListCard(entry = entry, selected = entry.id == selectedId, onClick = {
                                 selectedId = entry.id
                                 detailEntry = entry
