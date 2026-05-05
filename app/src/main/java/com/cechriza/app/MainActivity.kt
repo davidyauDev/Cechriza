@@ -68,7 +68,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.work.*
-import com.cechriza.attendance.R
+import com.cechriza.app.R
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandBorder
