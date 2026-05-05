@@ -65,7 +65,10 @@ jobs:
           ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
           ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
         run: |
+          VERSION_NAME="${GITHUB_REF_NAME#v}"
           ./gradlew --no-daemon clean bundleRelease \
+            -PCI_VERSION_CODE=${{ github.run_number }} \
+            -PCI_VERSION_NAME="$VERSION_NAME" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload-keystore.jks" \
             -Pandroid.injected.signing.store.password="$ANDROID_SIGNING_STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_SIGNING_KEY_ALIAS" \
@@ -77,5 +80,5 @@ jobs:
           serviceAccountJson: ${{ runner.temp }}/play-store-key.json
           packageName: com.cechrza.app
           releaseFiles: app/build/outputs/bundle/release/*.aab
-          track: internal
+          tracks: internal
           status: completed
