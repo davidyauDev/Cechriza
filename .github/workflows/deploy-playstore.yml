@@ -66,8 +66,9 @@ jobs:
           ANDROID_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
         run: |
           VERSION_NAME="${GITHUB_REF_NAME#v}"
+          VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER))
           ./gradlew --no-daemon clean bundleRelease \
-            -PCI_VERSION_CODE=${{ github.run_number }} \
+            -PCI_VERSION_CODE=$VERSION_CODE \
             -PCI_VERSION_NAME="$VERSION_NAME" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload-keystore.jks" \
             -Pandroid.injected.signing.store.password="$ANDROID_SIGNING_STORE_PASSWORD" \
