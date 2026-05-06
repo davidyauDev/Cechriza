@@ -91,7 +91,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJson: ${{ runner.temp }}/play-store-key.json
-          packageName: com.cechriza.app
+          packageName: com.cechrza.app
           releaseFiles: app/build/outputs/bundle/release/*.aab
           tracks: internal
           status: completed
