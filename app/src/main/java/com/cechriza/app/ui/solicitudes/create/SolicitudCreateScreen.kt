@@ -1,7 +1,11 @@
 package com.cechriza.app.ui.solicitudes.create
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -78,6 +82,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.cechriza.app.data.model.solicitudes.SolicitudBaseFields
 import com.cechriza.app.data.model.solicitudes.SubmitRequestResult
@@ -625,6 +630,9 @@ fun SolicitudCreateScreen(
                                     )
                                 }
                             },
+                            onCameraLaunchError = { message ->
+                                scope.launch { snackbarHostState.showSnackbar(message) }
+                            },
                             onSubmit = {
                                 submitAttempted = true
                                 if (!canSubmit) {
@@ -862,13 +870,16 @@ private fun RequestForm(
     onDescriptionChange: (Int, InventoryOption) -> Unit,
     onObservationsChange: (Int, String) -> Unit,
     onPhotoChange: (Int, String?, Bitmap?) -> Unit,
+    onCameraLaunchError: (String) -> Unit,
     onSubmit: () -> Unit,
     enabledSubmit: Boolean,
     isSubmitting: Boolean,
     isGastoFlow: Boolean = false,
     singleItemFlow: Boolean = false
 ) {
+    val context = LocalContext.current
     var pendingPhotoIndex by remember { mutableStateOf<Int?>(null) }
+    var pendingCameraPermissionIndex by remember { mutableStateOf<Int?>(null) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -884,6 +895,24 @@ private fun RequestForm(
         val index = pendingPhotoIndex ?: return@rememberLauncherForActivityResult
         onPhotoChange(index, null, bitmap)
         pendingPhotoIndex = null
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val index = pendingCameraPermissionIndex
+        pendingCameraPermissionIndex = null
+        if (!granted) {
+            onCameraLaunchError("Permiso de camara denegado. Habilitalo en ajustes para tomar foto.")
+            return@rememberLauncherForActivityResult
+        }
+        if (index == null) return@rememberLauncherForActivityResult
+        pendingPhotoIndex = index
+        runCatching { cameraLauncher.launch(null) }
+            .onFailure {
+                pendingPhotoIndex = null
+                onCameraLaunchError("No se pudo abrir la camara en este dispositivo.")
+            }
     }
 
     Column(
@@ -941,8 +970,27 @@ private fun RequestForm(
                             galleryLauncher.launch("image/*")
                         },
                         onCameraPhotoClick = {
+                            val canHandleCameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+                                .resolveActivity(context.packageManager) != null
+                            if (!canHandleCameraIntent) {
+                                onCameraLaunchError("No se encontro una app de camara disponible.")
+                                return@MaterialItemCard
+                            }
+                            val hasCameraPermission = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!hasCameraPermission) {
+                                pendingCameraPermissionIndex = index
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                return@MaterialItemCard
+                            }
                             pendingPhotoIndex = index
-                            cameraLauncher.launch(null)
+                            runCatching { cameraLauncher.launch(null) }
+                                .onFailure {
+                                    pendingPhotoIndex = null
+                                    onCameraLaunchError("No se pudo abrir la camara en este dispositivo.")
+                                }
                         },
                         isGastoFlow = isGastoFlow,
                         showValidation = submitAttempted,

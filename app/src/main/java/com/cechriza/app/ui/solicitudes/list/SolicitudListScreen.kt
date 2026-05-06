@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.data.remote.solicitudes.SolicitudesRemoteDataSource
 import com.cechriza.app.ui.home.AppHeader
@@ -44,6 +45,8 @@ import com.cechriza.app.ui.solicitudes.list.components.RequestTypeDialog
 import com.cechriza.app.ui.solicitudes.list.components.SolicitudModeTabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY = "solicitud_list_open_botas_tab"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +72,10 @@ fun SolicitudListScreen(
     var showRequestTypeDialog by remember { mutableStateOf(false) }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val openBotasTabSignal = navBackStackEntry
+        ?.savedStateHandle
+        ?.get<Long>(SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY)
     val uiState = SolicitudListUiState(
         mode = mode,
         source = comprobanteSource,
@@ -79,6 +86,15 @@ fun SolicitudListScreen(
         requestsError = errorMessage,
         comprobantesError = comprobantesError
     )
+
+    LaunchedEffect(openBotasTabSignal) {
+        if (openBotasTabSignal == null) return@LaunchedEffect
+        mode = HistoryMode.Comprobantes
+        comprobanteSource = ComprobanteSource.Rrhh
+        navBackStackEntry
+            ?.savedStateHandle
+            ?.remove<Long>(SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY)
+    }
 
     LaunchedEffect(reloadRequestsTick) {
         isLoading = true

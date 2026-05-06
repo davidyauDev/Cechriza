@@ -80,6 +80,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import java.util.concurrent.TimeUnit
 
+private const val SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY = "solicitud_list_open_botas_tab"
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -246,7 +248,15 @@ fun AppNavigation(navController: NavHostController) {
             SolicitudCreateScreen(
                 onHomeClick = returnToPrevious,
                 onNotificationsClick = returnToPrevious,
-                onRegisterSuccess = returnToPrevious,
+                onRegisterSuccess = {
+                    val shouldOpenGastosBotasTab = preset?.trim()?.lowercase() in setOf("epp", "epps", "botas")
+                    if (shouldOpenGastosBotasTab) {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY, System.currentTimeMillis())
+                    }
+                    returnToPrevious()
+                },
                 initialPreset = preset
             )
         }

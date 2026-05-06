@@ -128,10 +128,10 @@ fun LoginScreen(
         }
 
         if (password.isBlank()) {
-            passwordError = "Ingresa tu contrasena"
+            passwordError = "Ingresa tu contraseña"
             isValid = false
         } else if (password.length < 6) {
-            passwordError = "La contrasena debe tener al menos 6 caracteres"
+            passwordError = "La contraseña debe tener al menos 6 caracteres"
             isValid = false
         }
 
@@ -152,37 +152,39 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Image(
                 painter = painterResource(id = R.drawable.logo_cechriza),
                 contentDescription = "Logo de la empresa",
-                modifier = Modifier.size(208.dp)
+                modifier = Modifier.size(164.dp)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "Iniciar sesion",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF101828)
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Ingresa tu codigo de empleado y contrasena",
-                style = MaterialTheme.typography.bodyMedium,
-                color = mutedText,
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF101828),
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Ingresa tu codigo de empleado y contraseña",
+                style = MaterialTheme.typography.bodyMedium,
+                color = mutedText,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = 320.dp)
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
 
             Column(
                 modifier = Modifier
@@ -225,8 +227,8 @@ fun LoginScreen(
                         password = it
                         passwordError = null
                     },
-                    label = { Text("Contrasena") },
-                    placeholder = { Text("Ingresa tu contrasena") },
+                    label = { Text("Contraseña") },
+                    placeholder = { Text("Ingresa tu contraseña") },
                     leadingIcon = {
                         Icon(Icons.Default.Lock, contentDescription = null)
                     },
@@ -291,7 +293,7 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "Acceso exclusivo para personal autorizado",
@@ -299,6 +301,8 @@ fun LoginScreen(
                 color = mutedText,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }

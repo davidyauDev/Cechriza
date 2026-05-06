@@ -3,6 +3,8 @@ package com.cechriza.app.ui.solicitudes.list.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,17 +20,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +60,13 @@ import com.cechriza.app.ui.solicitudes.list.RequestStatus
 import com.cechriza.app.ui.solicitudes.list.StatusChipStyle
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private val SegmentedContainerColor = Color(0xFFEEF1F5)
+private val SegmentedContainerBorder = Color(0xFFDCE2EA)
+private val SegmentedActiveColor = Color.White
+private val SegmentedPressedOverlay = Color(0x0F101828)
+private val SegmentedInactiveText = Color(0xFF667085)
+private val SegmentedActiveText = Color(0xFF0F172A)
 
 internal fun statusChipStyle(status: RequestStatus): StatusChipStyle {
     return when (status) {
@@ -101,40 +114,106 @@ private fun formatLatamDateTime(value: String): String {
 
 @Composable
 internal fun SolicitudModeTabs(mode: HistoryMode, onChange: (HistoryMode) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HistoryMode.values().forEach { option ->
-            OutlinedButton(
-                onClick = { onChange(option) },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, if (mode == option) BrandBlue else BrandBorder)
-            ) {
-                Text(text = option.label, color = if (mode == option) BrandBlue else BrandMuted)
-            }
-        }
-    }
+    SegmentedTabs(
+        options = HistoryMode.values().toList(),
+        selectedOption = mode,
+        labelFor = { it.label },
+        onChange = onChange
+    )
 }
 
 @Composable
 internal fun ComprobanteSourceTabs(source: ComprobanteSource, onChange: (ComprobanteSource) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ComprobanteSource.values().forEach { option ->
-            OutlinedButton(
-                onClick = { onChange(option) },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, if (source == option) BrandBlue else BrandBorder)
-            ) {
-                Text(text = option.label, color = if (source == option) BrandBlue else BrandMuted)
-            }
-        }
-    }
+    SegmentedTabs(
+        options = ComprobanteSource.values().toList(),
+        selectedOption = source,
+        labelFor = { it.label },
+        onChange = onChange
+    )
 }
 
 @Composable
 internal fun ReloadRow(onReload: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        OutlinedButton(onClick = onReload) { Text("Recargar") }
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, SegmentedContainerBorder)
+        ) {
+            IconButton(
+                onClick = onReload,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Recargar",
+                    tint = SegmentedInactiveText
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> SegmentedTabs(
+    options: List<T>,
+    selectedOption: T,
+    labelFor: (T) -> String,
+    onChange: (T) -> Unit,
+    enabled: Boolean = true
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = SegmentedContainerColor,
+        border = BorderStroke(1.dp, SegmentedContainerBorder)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            options.forEach { option ->
+                val isActive = option == selectedOption
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+
+                Surface(
+                    onClick = { if (enabled) onChange(option) },
+                    enabled = enabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = when {
+                        !enabled -> Color.Transparent
+                        isPressed -> SegmentedPressedOverlay
+                        isActive -> SegmentedActiveColor
+                        else -> Color.Transparent
+                    },
+                    border = null,
+                    shadowElevation = if (isActive) 1.dp else 0.dp,
+                    interactionSource = interactionSource
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = labelFor(option),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                            color = when {
+                                !enabled -> SegmentedInactiveText.copy(alpha = 0.45f)
+                                isActive -> SegmentedActiveText
+                                else -> SegmentedInactiveText
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
