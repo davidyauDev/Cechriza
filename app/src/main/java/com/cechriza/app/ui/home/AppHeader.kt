@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val HeaderBackground = Color(0xFF2E7D32)
+private val HeaderBackground = BrandBlue
 private val HeaderTitleColor = Color.White
 private val HeaderSubtitleColor = Color(0xFFDCE7FF)
 private val HeaderButtonTint = BrandBlueDark

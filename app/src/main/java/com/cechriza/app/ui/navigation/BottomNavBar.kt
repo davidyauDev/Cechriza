@@ -3,11 +3,13 @@ package com.cechriza.app.ui.navigation
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,11 +24,12 @@ import androidx.compose.ui.unit.sp
 import com.cechriza.app.data.local.model.NavItem
 
 private val BottomBarBackground = Color.White
-private val BottomBarBorder = Color(0xFFE6E6E6)
-private val SelectedIcon = Color(0xFF111111)
-private val SelectedLabel = Color(0xFF111111)
-private val UnselectedIcon = Color(0xFFB0B0B0)
-private val UnselectedLabel = Color(0xFFB0B0B0)
+private val BottomBarBorder = Color(0xFFE2E8F0)
+private val SelectedIcon = Color(0xFF0F172A)
+private val SelectedLabel = Color(0xFF0F172A)
+private val UnselectedIcon = Color(0xFF94A3B8)
+private val UnselectedLabel = Color(0xFF94A3B8)
+private val SelectedContainer = Color(0xFFEFF4FF)
 
 @Composable
 fun BottomNavBar(
@@ -37,12 +40,13 @@ fun BottomNavBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = BottomBarBackground,
-        border = BorderStroke(1.dp, BottomBarBorder)
+        border = BorderStroke(1.dp, BottomBarBorder),
+        shadowElevation = 2.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -69,27 +73,35 @@ private fun NavItemChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Surface(
         modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 2.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) SelectedContainer else Color.Transparent
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (selected) SelectedIcon else UnselectedIcon,
-            modifier = Modifier.size(22.dp)
-        )
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (selected) SelectedIcon else UnselectedIcon,
+                    modifier = Modifier.size(21.dp)
+                )
+            }
 
-        Text(
-            text = label,
-            fontSize = 10.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) SelectedLabel else UnselectedLabel,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) SelectedLabel else UnselectedLabel,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

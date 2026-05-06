@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 object SessionManager {
 
@@ -54,7 +55,7 @@ object SessionManager {
 
         val prefs = UserPreferences(context)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        runBlocking(Dispatchers.IO) {
             prefs.saveUser(
                 name = name,
                 token = token,
@@ -79,7 +80,7 @@ object SessionManager {
 
         val prefs = UserPreferences(context)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        runBlocking(Dispatchers.IO) {
             prefs.clearUser()
         }
     }

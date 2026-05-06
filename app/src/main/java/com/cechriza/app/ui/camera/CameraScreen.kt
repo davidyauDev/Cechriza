@@ -3,18 +3,39 @@ package com.cechriza.app.ui.camera
 import android.graphics.Bitmap
 import android.util.Log
 import android.widget.Toast
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.compose.foundation.Image
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,47 +44,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.cechriza.app.data.local.database.AttendanceDatabase
+import com.cechriza.app.data.local.database.LocationDatabase
 import com.cechriza.app.data.local.entity.AttendanceType
 import com.cechriza.app.data.preferences.UserPreferences
 import com.cechriza.app.data.repository.AttendanceRepository
+import com.cechriza.app.ui.home.LocationResult
+import com.cechriza.app.ui.home.awaitLocationForAttendanceImproved
 import com.cechriza.app.ui.home.saveBitmapToFile
 import com.google.android.gms.location.LocationServices
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import androidx.camera.core.Preview
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageProxy
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.graphics.asImageBitmap
-import com.cechriza.app.ui.home.awaitLocationForAttendanceImproved
-import com.cechriza.app.ui.home.LocationResult
-import com.cechriza.app.ui.home.AppHeader
-import com.cechriza.app.data.local.database.LocationDatabase
-
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @androidx.camera.core.ExperimentalGetImage
 @Composable
@@ -85,26 +92,21 @@ fun CameraScreen(
     }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locationDao = remember { LocationDatabase.getDatabase(context).locationDao() }
+
     AttendanceCameraView(
         onCaptureImage = { bitmap ->
-            val uri = saveBitmapToFile(context, bitmap)
-            Log.d("SELFIE", "Imagen guardada: $uri")
+            saveBitmapToFile(context, bitmap)
             coroutineScope.launch {
                 isLoading = true
                 try {
-                    // Obtener ubicación usando la versión mejorada que devuelve LocationResult
                     var loc: android.location.Location? = null
                     var result = awaitLocationForAttendanceImproved(fusedLocationClient, context, locationDao, 10000L)
                     if (result is LocationResult.Success) {
                         loc = result.location
                     } else {
-                        Log.d("CameraScreen", "Ubicación no obtenida en primer intento; reintentando... (reason=${(result as? LocationResult.Error)?.reason})")
-                        // reintento rápido
                         delay(1000L)
                         result = awaitLocationForAttendanceImproved(fusedLocationClient, context, locationDao, 5000L)
-                        if (result is LocationResult.Success) {
-                            loc = result.location
-                        }
+                        if (result is LocationResult.Success) loc = result.location
                     }
 
                     if (loc != null) {
@@ -114,48 +116,33 @@ fun CameraScreen(
                             type = attendanceType,
                             photo = bitmap
                         )
-
                         if (saveResult.isSuccess) {
-                            Toast.makeText(context, "🎉 Asistencia registrada con éxito", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Asistencia registrada", Toast.LENGTH_SHORT).show()
                             navController.popBackStack()
                         } else {
-                            val error = saveResult.exceptionOrNull()
-                            Log.e("AttendanceError", "Error al registrar asistencia", error)
-                            Toast.makeText(
-                                context,
-                                "Error al registrar asistencia: ${error?.message}",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            Toast.makeText(context, "No se pudo registrar asistencia", Toast.LENGTH_LONG).show()
                         }
                     } else {
-                        Log.w("CameraScreen", "Ubicación no disponible después de reintentos")
-                        Toast.makeText(context, "Ubicación no disponible al momento de la captura.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Ubicacion no disponible", Toast.LENGTH_SHORT).show()
                     }
                 } catch (ex: Exception) {
-                    Log.e("CameraScreen", "Excepción al obtener ubicación o guardar asistencia", ex)
-                    Toast.makeText(context, "Error inesperado: ${ex.message}", Toast.LENGTH_LONG).show()
+                    Log.e("CameraScreen", "Error en captura", ex)
+                    Toast.makeText(context, "Error inesperado", Toast.LENGTH_LONG).show()
                 } finally {
                     isLoading = false
                 }
             }
         },
-        onClose = {
-            navController.popBackStack()
-        },
-        onNotificationsClick = {
-            navController.navigate("notifications")
-        },
+        onClose = { navController.popBackStack() },
         isLoading = isLoading
     )
 }
-
 
 @androidx.camera.core.ExperimentalGetImage
 @Composable
 fun AttendanceCameraView(
     onCaptureImage: (Bitmap) -> Unit,
     onClose: () -> Unit,
-    onNotificationsClick: () -> Unit,
     isLoading: Boolean = false
 ) {
     val context = LocalContext.current
@@ -164,45 +151,29 @@ fun AttendanceCameraView(
     val executor = ContextCompat.getMainExecutor(context)
 
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isProcessingFace by remember { mutableStateOf(false) }
     var faceDetected by remember { mutableStateOf(false) }
-
-    // Estabilización: requerir N frames consecutivos para confirmar detección
     var consecutiveDetectedFrames by remember { mutableStateOf(0) }
     var consecutiveLostFrames by remember { mutableStateOf(0) }
-    val requiredStableFrames = 2 // menos estricto: 2 frames estables
-    val lostToleranceFrames = 3   // tolerar más pequeñas pérdidas
 
-    // Configuración más precisa pero tolerante de ML Kit
     val detectorOptions = remember {
         FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
             .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-            .setMinFaceSize(0.05f) // menos estricto: aceptar rostros más pequeños en preview
+            .setMinFaceSize(0.05f)
             .build()
     }
     val faceDetector: FaceDetector = remember { FaceDetection.getClient(detectorOptions) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
-            factory = {
-                previewView
-            },
+            factory = { previewView },
             modifier = Modifier.fillMaxSize()
         ) {
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
-
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                val imageCapture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .build()
-
-                // ImageAnalysis para detección continua de rostros
+                val preview = Preview.Builder().build().also { p -> p.setSurfaceProvider(previewView.surfaceProvider) }
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
@@ -210,207 +181,134 @@ fun AttendanceCameraView(
                 imageAnalysis.setAnalyzer(executor) { imageProxy: ImageProxy ->
                     val mediaImage = imageProxy.image
                     if (mediaImage != null) {
-                        val rotation = imageProxy.imageInfo.rotationDegrees
-                        val inputImage = InputImage.fromMediaImage(mediaImage, rotation)
-
-                        // Procesar con ML Kit
+                        val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                         faceDetector.process(inputImage)
                             .addOnSuccessListener { faces: List<Face> ->
-                                if (faces.isNotEmpty()) {
-                                    val mainFace = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                                val detectedNow = if (faces.isNotEmpty()) {
+                                    val f = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
+                                    val wRatio = (f?.boundingBox?.width()?.toFloat() ?: 0f) / imageProxy.width.toFloat()
+                                    val hRatio = (f?.boundingBox?.height()?.toFloat() ?: 0f) / imageProxy.height.toFloat()
+                                    wRatio >= 0.09f && hRatio >= 0.09f
+                                } else false
 
-                                    // Calcular proporciones relativas
-                                    val frameWidth = imageProxy.width.toFloat()
-                                    val frameHeight = imageProxy.height.toFloat()
-                                    val faceWidth = mainFace?.boundingBox?.width()?.toFloat() ?: 0f
-                                    val faceHeight = mainFace?.boundingBox?.height()?.toFloat() ?: 0f
-
-                                    val faceWidthRatio = if (frameWidth > 0) faceWidth / frameWidth else 0f
-                                    val faceHeightRatio = if (frameHeight > 0) faceHeight / frameHeight else 0f
-
-                                    // Umbrales menos estrictos: aceptar rostros que ocupen ~9% del ancho/alto
-                                    val widthOk = faceWidthRatio >= 0.09f
-                                    val heightOk = faceHeightRatio >= 0.09f
-
-                                    // Se quita la validación de estar completamente dentro del marco para permitir capturas
-                                    // aunque el rostro no esté perfectamente centrado.
-                                    val detectedNow = (widthOk && heightOk)
-
-                                    if (detectedNow) {
-                                        consecutiveDetectedFrames += 1
-                                        consecutiveLostFrames = 0
-                                        if (consecutiveDetectedFrames >= requiredStableFrames) {
-                                            if (!faceDetected) faceDetected = true
-                                        }
-                                    } else {
-                                        consecutiveDetectedFrames = 0
-                                        consecutiveLostFrames += 1
-                                        if (consecutiveLostFrames >= lostToleranceFrames) {
-                                            if (faceDetected) faceDetected = false
-                                        }
-                                    }
-
+                                if (detectedNow) {
+                                    consecutiveDetectedFrames += 1
+                                    consecutiveLostFrames = 0
+                                    if (consecutiveDetectedFrames >= 2) faceDetected = true
                                 } else {
                                     consecutiveDetectedFrames = 0
                                     consecutiveLostFrames += 1
-                                    if (consecutiveLostFrames >= lostToleranceFrames) {
-                                        if (faceDetected) faceDetected = false
-                                    }
+                                    if (consecutiveLostFrames >= 3) faceDetected = false
                                 }
                             }
-                            .addOnFailureListener { e ->
-                                Log.e("FaceDetect", "Error en análisis continuo", e)
-                                consecutiveDetectedFrames = 0
-                                consecutiveLostFrames += 1
-                                if (consecutiveLostFrames >= lostToleranceFrames) {
-                                    if (faceDetected) faceDetected = false
-                                }
-                            }
-                            .addOnCompleteListener {
-                                imageProxy.close()
-                            }
+                            .addOnCompleteListener { imageProxy.close() }
                     } else {
                         imageProxy.close()
                     }
                 }
 
-                val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     lifecycleOwner,
-                    cameraSelector,
+                    CameraSelector.DEFAULT_FRONT_CAMERA,
                     preview,
-                    imageCapture,
                     imageAnalysis
                 )
             }, executor)
         }
 
-        AppHeader(
-            title = "Camara",
-            subtitle = "Captura de asistencia",
-            showBackButton = true,
-            onBackClick = { onClose() },
-            showNotificationButton = true,
-            onNotificationClick = onNotificationsClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .zIndex(10f)
-        )
-
-        // Indicador de estado de detección en tiempo real
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 16.dp)
-                .zIndex(5f)
-        ) {
-            val bgColor by animateColorAsState(targetValue = if (faceDetected) Color(0xFF0B8043) else Color(0xAA000000), animationSpec = tween(durationMillis = 280))
-            val iconScale by animateFloatAsState(targetValue = if (faceDetected) 1.12f else 1f, animationSpec = tween(durationMillis = 280))
-
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = bgColor,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .height(IntrinsicSize.Min),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val icon = if (faceDetected) Icons.Default.CheckCircle else Icons.Default.Face
-                    val iconTint = Color.White
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = if (faceDetected) "Rostro detectado" else "Buscando rostro",
-                        tint = iconTint,
-                        modifier = Modifier.size(20.dp).scale(iconScale)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = if (faceDetected) "Listo para capturar" else "Ajusta tu rostro",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (faceDetected) "Pulsa 'Tomar Foto' para confirmar" else "Colócate dentro del marco",
-                            color = Color.White.copy(alpha = 0.9f),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
+                .fillMaxWidth()
+                .height(140.dp)
+                .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.45f), 1f to Color.Transparent))
+                .zIndex(2f)
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(190.dp)
+                .background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f)))
+                .zIndex(2f)
+        )
 
         IconButton(
             onClick = onClose,
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .padding(16.dp)
-                .size(48.dp)
-                .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                .size(44.dp)
+                .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                .zIndex(6f)
         ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Cerrar cámara",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
         }
 
-        // Ghost-frame (marco guía) para ayudar al usuario a posicionar el rostro
+        val frameColor by animateColorAsState(
+            targetValue = if (faceDetected) Color(0xFF22C55E) else Color.White.copy(alpha = 0.82f),
+            animationSpec = tween(220), label = "frame_color"
+        )
+        val frameScale by animateFloatAsState(
+            targetValue = if (faceDetected) 1.02f else 1f,
+            animationSpec = tween(220), label = "frame_scale"
+        )
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .fillMaxWidth(0.62f)
-                .aspectRatio(0.8f)
+                .fillMaxWidth(0.68f)
+                .aspectRatio(0.75f)
+                .scale(frameScale)
+                .border(2.dp, frameColor, RoundedCornerShape(999.dp))
                 .zIndex(4f)
-                .background(Color.Transparent)
-                .border(width = 2.dp, color = Color.White.copy(alpha = 0.6f), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 132.dp)
+                .zIndex(5f)
         ) {
-            // guía simple, no dinámico
+            val hintBg by animateColorAsState(
+                targetValue = if (faceDetected) Color(0xFF16A34A) else Color.Black.copy(alpha = 0.52f),
+                animationSpec = tween(220), label = "hint_bg"
+            )
+            Surface(shape = RoundedCornerShape(12.dp), color = hintBg) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (faceDetected) Icons.Default.CheckCircle else Icons.Default.Face,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = if (faceDetected) "Rostro alineado. Captura lista." else "Centra tu rostro dentro del ovalo",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
 
-
-
-        // Mejorar estilo del botón: colores más claros y visual de deshabilitado
-        val captureEnabled = faceDetected && !isLoading && !isProcessingFace
-
+        val captureEnabled = faceDetected && !isLoading
         Button(
             onClick = {
                 val bitmap = previewView.bitmap
-                if (bitmap != null) {
-                    // Ya validamos en tiempo real; simplemente guardar la imagen para vista previa
-                    capturedBitmap = bitmap
-                } else {
-                    Toast.makeText(context, "❌ No se pudo capturar la imagen", Toast.LENGTH_SHORT).show()
-                }
+                if (bitmap != null) capturedBitmap = bitmap
+                else Toast.makeText(context, "No se pudo capturar imagen", Toast.LENGTH_SHORT).show()
             },
             enabled = captureEnabled,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = if (captureEnabled) Color(0xFF0B8043) else Color(0xFF555555)
-            )
+                .padding(bottom = 44.dp)
+                .zIndex(5f)
         ) {
-            Text("Tomar Foto")
-        }
-
-        // Indicador cuando ML Kit está procesando la detección facial puntual (si se usa)
-        if (isProcessingFace) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 140.dp)
-                    .zIndex(4f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = Color.White)
-            }
+            Text("Capturar")
         }
 
         if (isLoading) {
@@ -418,7 +316,7 @@ fun AttendanceCameraView(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.5f))
-                    .zIndex(2f),
+                    .zIndex(8f),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = Color.White)
@@ -430,10 +328,10 @@ fun AttendanceCameraView(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-                    .zIndex(3f),
+                    .zIndex(9f),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
+                androidx.compose.foundation.Image(
                     bitmap = capturedBitmap!!.asImageBitmap(),
                     contentDescription = "Vista previa",
                     modifier = Modifier.fillMaxSize()
@@ -441,18 +339,14 @@ fun AttendanceCameraView(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 120.dp), // moved buttons a bit higher
+                        .padding(bottom = 120.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Button(onClick = { capturedBitmap = null }) {
-                        Text("Cancelar")
-                    }
+                    Button(onClick = { capturedBitmap = null }) { Text("Cancelar") }
                     Button(onClick = {
                         onCaptureImage(capturedBitmap!!)
                         capturedBitmap = null
-                    }) {
-                        Text("Aceptar")
-                    }
+                    }) { Text("Aceptar") }
                 }
             }
         }

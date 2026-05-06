@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
@@ -27,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cechriza.app.ui.Attendance.AttendanceViewModel
@@ -55,11 +57,11 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
         )
 
         Surface(
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(16.dp),
             color = Color.White,
-            border = BorderStroke(1.dp, BrandBorder),
+            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f)),
             tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
+            shadowElevation = 1.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             if (lastAttendance != null) {
@@ -78,53 +80,70 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                     )
                 }
 
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .background(accent.copy(alpha = 0.12f), CircleShape),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = accent
-                        )
-                    }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(accent.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = accent
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = label,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            color = accent
-                        )
-                        Text(
-                            text = formattedDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandMuted
-                        )
-                    }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hoy · $label",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = BrandText
+                            )
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                        }
 
-                    Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = formattedTime,
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = BrandText
                         )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Circle,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Ultima hora",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = "Registro completado correctamente",
+                            style = MaterialTheme.typography.bodySmall,
                             color = BrandMuted,
-                            textAlign = TextAlign.End
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

@@ -2,6 +2,8 @@ package com.cechriza.app.ui.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,13 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Login
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,13 +42,14 @@ fun EntryExitButtons(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, BrandBorder)
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f)),
+        shadowElevation = 1.dp
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = "Marcar asistencia",
@@ -53,7 +59,7 @@ fun EntryExitButtons(
             )
 
             Text(
-                text = "Elige Entrada o Salida para registrar",
+                text = "Selecciona una accion para registrar tu jornada",
                 style = MaterialTheme.typography.bodySmall,
                 color = BrandMuted
             )
@@ -64,21 +70,21 @@ fun EntryExitButtons(
             ) {
                 QuickActionTile(
                     modifier = Modifier.weight(1f),
-                    label = "ENTRADA",
-                    icon = Icons.Default.CameraAlt,
+                    label = "Entrada",
+                    icon = Icons.Default.Login,
                     accent = BrandBlue,
-                    container = Color.White,
-                    contentColor = BrandBlueDark,
+                    container = BrandBlue,
+                    contentColor = Color.White,
                     isBusy = isBusy && activeType == AttendanceType.ENTRADA,
                     onClick = onEntry
                 )
                 QuickActionTile(
                     modifier = Modifier.weight(1f),
-                    label = "SALIDA",
-                    icon = Icons.Default.CameraAlt,
-                    accent = BrandOrangeSoft,
-                    container = Color.White,
-                    contentColor = Color(0xFF9A4A10),
+                    label = "Salida",
+                    icon = Icons.Default.Logout,
+                    accent = Color(0xFF0F172A),
+                    container = Color(0xFF0F172A),
+                    contentColor = Color.White,
                     isBusy = isBusy && activeType == AttendanceType.SALIDA,
                     onClick = onExit
                 )
@@ -98,12 +104,17 @@ private fun QuickActionTile(
     isBusy: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
     Surface(
         onClick = onClick,
-        modifier = modifier.height(96.dp),
-        shape = RoundedCornerShape(22.dp),
-        color = container,
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f))
+        enabled = !isBusy,
+        interactionSource = interactionSource,
+        modifier = modifier.height(88.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (pressed) container.copy(alpha = 0.9f) else container,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.15f)),
+        shadowElevation = if (pressed) 0.dp else 1.dp
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -112,13 +123,13 @@ private fun QuickActionTile(
         ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
-                    .background(accent.copy(alpha = 0.14f), CircleShape),
+                    .size(32.dp)
+                    .background(Color.White.copy(alpha = if (contentColor == Color.White) 0.18f else 0.1f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (isBusy) {
                     CircularProgressIndicator(
-                        color = contentColor,
+                        color = Color.White,
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(16.dp)
                     )
@@ -135,7 +146,8 @@ private fun QuickActionTile(
             Text(
                 text = label,
                 color = contentColor,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall
             )
 
             Spacer(modifier = Modifier.height(1.dp))

@@ -75,12 +75,10 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearUser() {
-        viewModelScope.launch {
-            userPreferences.clearUser()
-            _userName.value = ""
-            _userToken.value = ""
-            _userId.value = 0
-            _userEmail.value = ""
-        }
+        _userName.value = ""
+        _userToken.value = ""
+        _userId.value = 0
+        _userEmail.value = ""
+        _userEmpCode.value = ""
     }
 }

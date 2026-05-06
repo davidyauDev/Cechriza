@@ -17,6 +17,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.GpsOff
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -107,59 +118,252 @@ fun tryGetMockLocationAppName(context: Context): String? {
 }
 
 @Composable
-private fun DrawerCardItem(
+private fun DrawerNavItem(
     title: String,
-    subtitle: String,
-    badge: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
-    onClick: () -> Unit,
-    accent: Color = BrandBlue,
-    accentSoft: Color = BrandBlueSoft
+    onClick: () -> Unit
 ) {
+    val activeBg = Color(0xFFEFF4FF)
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) accentSoft else Color.White,
-        border = BorderStroke(1.dp, if (selected) accent.copy(alpha = 0.25f) else BrandBorder)
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) activeBg else Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(accentSoft, CircleShape),
+                    .width(3.dp)
+                    .height(20.dp)
+                    .background(if (selected) BrandBlue else Color.Transparent, RoundedCornerShape(999.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(
+                        if (selected) BrandBlue.copy(alpha = 0.12f) else Color(0xFFF3F4F6),
+                        RoundedCornerShape(8.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = badge,
-                    color = accent,
-                    fontWeight = FontWeight.SemiBold
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) BrandBlue else BrandMuted,
+                    modifier = Modifier.size(16.dp)
                 )
+            }
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (selected) BrandText else Color(0xFF475467),
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun DrawerLogoutItem(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFFEF2F2)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .background(Color(0xFFFEE4E2), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Logout,
+                    contentDescription = null,
+                    tint = Color(0xFFB42318),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = "Cerrar sesión",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFFB42318),
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeTopBar(
+    fullName: String,
+    onMenuClick: () -> Unit,
+    onNotificationClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.65f)),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                onClick = onMenuClick,
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFF8FAFC)
+            ) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Menu, contentDescription = "Menu", tint = BrandText)
+                }
             }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
+                    text = "Asistencia",
+                    style = MaterialTheme.typography.titleMedium,
                     color = BrandText,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = subtitle,
+                    text = fullName,
                     style = MaterialTheme.typography.bodySmall,
                     color = BrandMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+
+            Surface(
+                onClick = onNotificationClick,
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFF8FAFC)
+            ) {
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsNone,
+                        contentDescription = "Notificaciones",
+                        tint = BrandText
+                    )
+                }
+            }
         }
     }
 }
+
+@Composable
+private fun LocationStatusCard(
+    locationEnabled: Boolean,
+    isLoadingLocation: Boolean,
+    hasError: Boolean,
+    onPrimaryAction: () -> Unit
+) {
+    val (icon, title, subtitle, container, accent) = when {
+        isLoadingLocation -> Quintuple(
+            Icons.Default.MyLocation,
+            "Verificando ubicación",
+            "Estamos obteniendo tu posición actual.",
+            Color(0xFFEFF4FF),
+            BrandBlue
+        )
+        !locationEnabled -> Quintuple(
+            Icons.Default.GpsOff,
+            "Ubicación desactivada",
+            "Activa el GPS para registrar asistencia.",
+            Color(0xFFFFF7ED),
+            Color(0xFFB45309)
+        )
+        hasError -> Quintuple(
+            Icons.Default.ErrorOutline,
+            "Error de ubicación",
+            "Revisa permisos y vuelve a intentar.",
+            Color(0xFFFEF2F2),
+            Color(0xFFB91C1C)
+        )
+        else -> Quintuple(
+            Icons.Default.LocationOn,
+            "Ubicación activa",
+            "Lista para marcar entrada o salida.",
+            Color(0xFFECFDF3),
+            Color(0xFF15803D)
+        )
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = container,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color.White.copy(alpha = 0.85f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accent,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+
+            if (!locationEnabled) {
+                TextButton(onClick = onPrimaryAction) {
+                    Text("Activar")
+                }
+            }
+        }
+    }
+}
+
+private data class Quintuple<A, B, C, D, E>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D,
+    val fifth: E
+)
 
 @ExperimentalGetImage
 @Composable
@@ -509,56 +713,55 @@ fun HomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        scrimColor = Color(0x66111827),
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = BrandSurface,
-                drawerTonalElevation = 0.dp
+                drawerContainerColor = Color.White,
+                drawerTonalElevation = 2.dp,
+                drawerShape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .widthIn(max = 320.dp)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .widthIn(max = 340.dp)
+                        .padding(horizontal = 14.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color.White,
-                        border = BorderStroke(1.dp, BrandBorder)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color(0xFFEFF4FF), RoundedCornerShape(14.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .background(BrandBlueSoft, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = fullName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                        color = BrandBlueDark,
-                                        fontWeight = FontWeight.SemiBold,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                }
+                            Text(
+                                text = fullName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "U",
+                                color = BrandBlue,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
 
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = fullName,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = BrandText,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 2
-                                    )
-                                }
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = fullName,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = BrandText,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Operaciones",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
                         }
                     }
 
@@ -566,13 +769,12 @@ fun HomeScreen(
                         text = "Navegación",
                         style = MaterialTheme.typography.labelLarge,
                         color = BrandMuted,
-                        modifier = Modifier.padding(horizontal = 4.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
 
-                    DrawerCardItem(
+                    DrawerNavItem(
                         title = "Inicio",
-                        subtitle = "Vista principal",
-                        badge = "H",
+                        icon = Icons.Default.Home,
                         selected = selectedDrawerItem == "Home",
                         onClick = {
                             selectedDrawerItem = "Home"
@@ -580,10 +782,9 @@ fun HomeScreen(
                         }
                     )
 
-                    DrawerCardItem(
+                    DrawerNavItem(
                         title = "Rutas",
-                        subtitle = "Recorridos asignados",
-                        badge = "R",
+                        icon = Icons.Default.LocationOn,
                         selected = selectedDrawerItem == "Routes",
                         onClick = {
                             selectedDrawerItem = "Routes"
@@ -594,10 +795,22 @@ fun HomeScreen(
                         }
                     )
 
-                    DrawerCardItem(
+                    DrawerNavItem(
+                        title = "Memory Match",
+                        icon = Icons.Default.Extension,
+                        selected = selectedDrawerItem == "MemoryMatch",
+                        onClick = {
+                            selectedDrawerItem = "MemoryMatch"
+                            drawerCoroutineScope.launch {
+                                drawerState.close()
+                                navController.navigate("memory_match")
+                            }
+                        }
+                    )
+
+                    DrawerNavItem(
                         title = "Cuenta",
-                        subtitle = "Perfil y cierre de sesión",
-                        badge = "C",
+                        icon = Icons.Default.Person,
                         selected = selectedDrawerItem == "Account",
                         onClick = {
                             selectedDrawerItem = "Account"
@@ -608,13 +821,12 @@ fun HomeScreen(
                         }
                     )
 
-                    DrawerCardItem(
-                        title = "Cerrar sesión",
-                        subtitle = "Salir de la aplicación",
-                        badge = "X",
-                        selected = false,
-                        accent = BrandOrange,
-                        accentSoft = BrandOrangeSoft,
+                    HorizontalDivider(
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                        color = BrandBorder.copy(alpha = 0.7f)
+                    )
+
+                    DrawerLogoutItem(
                         onClick = {
                             SessionManager.clear(context)
                             userViewModel.clearUser()
@@ -626,8 +838,6 @@ fun HomeScreen(
                             }
                         }
                     )
-
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -642,45 +852,20 @@ fun HomeScreen(
                     .padding(paddingValues)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    AppHeader(
-                        title = "Inicio",
-                        subtitle = fullName,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(72.dp)
-                            .zIndex(1f),
-                        showMenuButton = true,
-                        showNotificationButton = true,
+                    HomeTopBar(
+                        fullName = fullName,
                         onMenuClick = { drawerCoroutineScope.launch { drawerState.open() } },
                         onNotificationClick = { navController.navigate("notifications") }
                     )
 
-                    if (!locationEnabled) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(18.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandOrangeSoft)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Ubicación desactivada. Actívala para registrar asistencia.",
-                                    modifier = Modifier.weight(1f),
-                                    color = BrandText
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                TextButton(onClick = { openLocationSettings(context) }) { Text("Activar") }
-                            }
+                    LocationStatusCard(
+                        locationEnabled = locationEnabled,
+                        isLoadingLocation = isLoadingLocation,
+                        hasError = showLocationErrorDialog,
+                        onPrimaryAction = {
+                            if (!locationEnabled) openLocationSettings(context)
                         }
-                    }
+                    )
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         RoundedTopContainer {

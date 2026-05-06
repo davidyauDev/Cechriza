@@ -1,6 +1,7 @@
 ﻿package com.cechriza.app.data.remote.network
 
 import com.cechriza.app.data.remote.dto.request.LoginRequest
+import com.cechriza.app.data.remote.dto.request.MemoryMatchScoreRequest
 import com.cechriza.app.data.remote.dto.response.AttendanceResponse
 import com.cechriza.app.data.remote.dto.response.EventosHoyResponse
 import com.cechriza.app.data.remote.dto.response.LoginResponseTotal
@@ -72,6 +73,21 @@ interface ApiService {
     @GET("solicitudes/{id}")
     suspend fun getSolicitudById(
         @Path("id") solicitudId: Int
+    ): Response<JsonElement>
+
+    @POST("memory-match/scores")
+    suspend fun submitMemoryMatchScore(
+        @Body request: MemoryMatchScoreRequest
+    ): Response<JsonElement>
+
+    @GET("memory-match/leaderboard")
+    suspend fun getMemoryMatchLeaderboard(
+        @Query("limit") limit: Int = 10
+    ): Response<JsonElement>
+
+    @GET("memory-match/my-score/{userId}")
+    suspend fun getMemoryMatchMyScore(
+        @Path("userId") userId: Int
     ): Response<JsonElement>
 
     @POST("solicitudes/registrar-completa")

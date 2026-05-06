@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,19 +36,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -116,7 +121,6 @@ private const val MAX_DROPDOWN_OPTIONS = 80
 private const val SOLICITUD_LOG_TAG = "SolicitudCompleta"
 private const val DEFAULT_JUSTIFICACION = "Pedido interno"
 private const val DEFAULT_ID_DIRECCION_ENTREGA_LIMA = "5"
-private const val DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA = "6"
 private const val EPP_AREA_ID = 11
 private const val ALMACEN_SOLICITUD_GENERAL_AREA_ID = 1
 
@@ -142,15 +146,6 @@ private enum class RequestTab(
     Materials("Insumos/Materiales", BrandBlue, 7, "LOGISTICA", "insumos"),
     Tools("Cilbradores / herramientas", BrandOrange, 12, "SSGG", "ssgg"),
     Epp("EPP", BrandBlueDark, 11, "SSOMA", "rrhh")
-}
-
-private enum class DeliveryZone(
-    val label: String,
-    val idDireccionEntrega: String,
-    val ubicacionValue: String
-) {
-    Lima("Lima", DEFAULT_ID_DIRECCION_ENTREGA_LIMA, "LIMA"),
-    Provincia("Provincia", DEFAULT_ID_DIRECCION_ENTREGA_PROVINCIA, "PROVINCIA")
 }
 
 private data class InventoryOption(
@@ -246,15 +241,14 @@ private fun buildRequestConfirmationSections(
 }
 
 private fun defaultSolicitudBaseFields(
-    deliveryZone: DeliveryZone,
     esPedidoCompra: Boolean
 ): SolicitudBaseFields {
     return SolicitudBaseFields(
         justificacion = DEFAULT_JUSTIFICACION,
         fechaNecesaria = LocalDate.now().plusDays(7).toString(),
-        idDireccionEntrega = deliveryZone.idDireccionEntrega,
+        idDireccionEntrega = DEFAULT_ID_DIRECCION_ENTREGA_LIMA,
         esPedidoCompra = esPedidoCompra,
-        ubicacion = deliveryZone.ubicacionValue
+        ubicacion = "LIMA"
     )
 }
 
@@ -314,7 +308,8 @@ fun SolicitudCreateScreen(
     var submitAttempted by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
-    var selectedDeliveryZone by remember { mutableStateOf(DeliveryZone.Lima) }
+    var showSuccessSheet by remember { mutableStateOf(false) }
+    var successMessage by remember { mutableStateOf("Solicitud registrada correctamente.") }
     var isPurchaseRequest by remember { mutableStateOf(false) }
     var expandedItemId by remember { mutableStateOf<String?>(null) }
     val presetKey = remember(initialPreset) { initialPreset?.trim()?.lowercase() }
@@ -427,7 +422,6 @@ fun SolicitudCreateScreen(
             }
                 val api = SolicitudesRemoteDataSource.authenticatedApi()
             val baseFields = defaultSolicitudBaseFields(
-                deliveryZone = selectedDeliveryZone,
                 esPedidoCompra = isPurchaseRequest
             )
             val result = withContext(Dispatchers.IO) {
@@ -474,7 +468,8 @@ fun SolicitudCreateScreen(
                 eppSection.items.clear()
                 expandedItemId = null
                 submitAttempted = false
-                onRegisterSuccess()
+                successMessage = result.message.ifBlank { "Solicitud registrada correctamente." }
+                showSuccessSheet = true
             } else {
                 snackbarHostState.showSnackbar(result.message)
             }
@@ -503,6 +498,38 @@ fun SolicitudCreateScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                item {
+                    val flowLabel = when {
+                        isEppOnlyFlow -> "Solicitud de Botas de seguridad"
+                        isGastoFlow -> "Solicitud de Gasto"
+                        isAlmacenFlow -> "Solicitud de Almacen"
+                        else -> "Nueva solicitud"
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, BrandBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = flowLabel,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = BrandText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Paso 2 de 3 · Completa los datos del pedido",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                        }
+                    }
+                }
+
                 item {
                     val requestTabs = remember {
                         if (isEppOnlyFlow) listOf(RequestTab.Epp) else listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
@@ -660,13 +687,21 @@ fun SolicitudCreateScreen(
                 RequestConfirmationDialog(
                     sections = confirmationSections,
                     totalItems = totalItems,
-                    selectedDeliveryZone = selectedDeliveryZone,
-                    onDeliveryZoneChange = { selectedDeliveryZone = it },
                     isPurchaseRequest = isPurchaseRequest,
                     onPurchaseRequestChange = { isPurchaseRequest = it },
                     showPurchaseOption = false,
                     onDismiss = { showConfirmDialog = false },
                     onConfirm = submitConfirmedRequest
+                )
+            }
+
+            if (showSuccessSheet) {
+                RegistrationSuccessSheet(
+                    message = successMessage,
+                    onClose = {
+                        showSuccessSheet = false
+                        onRegisterSuccess()
+                    }
                 )
             }
         }
@@ -713,148 +748,335 @@ private fun RegistrationLoadingOverlay() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RequestConfirmationDialog(
     sections: List<RequestConfirmationSection>,
     totalItems: Int,
-    selectedDeliveryZone: DeliveryZone,
-    onDeliveryZoneChange: (DeliveryZone) -> Unit,
     isPurchaseRequest: Boolean,
     onPurchaseRequestChange: (Boolean) -> Unit,
     showPurchaseOption: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Confirmar solicitud",
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Revisa el detalle antes de registrar ($totalItems item${if (totalItems == 1) "" else "s"}).",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BodyColor
-                )
-                Text(
-                    text = "Datos del pedido",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = TitleColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Entrega",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BodyColor
-                )
-                TabRow(
-                    selectedTabIndex = if (selectedDeliveryZone == DeliveryZone.Lima) 0 else 1,
-                    containerColor = Color.White,
-                    divider = { HorizontalDivider(color = BrandBorder) }
-                ) {
-                    Tab(
-                        selected = selectedDeliveryZone == DeliveryZone.Lima,
-                        onClick = { onDeliveryZoneChange(DeliveryZone.Lima) },
-                        selectedContentColor = AccentColor,
-                        unselectedContentColor = BrandMuted,
-                        text = { Text(DeliveryZone.Lima.label) }
-                    )
-                    Tab(
-                        selected = selectedDeliveryZone == DeliveryZone.Provincia,
-                        onClick = { onDeliveryZoneChange(DeliveryZone.Provincia) },
-                        selectedContentColor = AccentColor,
-                        unselectedContentColor = BrandMuted,
-                        text = { Text(DeliveryZone.Provincia.label) }
-                    )
-                }
-
-                if (showPurchaseOption) {
-                    Text(
-                        text = "Solicitud de compra",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = BodyColor
-                    )
-                    TabRow(
-                        selectedTabIndex = if (isPurchaseRequest) 1 else 0,
-                        containerColor = Color.White,
-                        divider = { HorizontalDivider(color = BrandBorder) }
+        containerColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Tab(
-                            selected = !isPurchaseRequest,
-                            onClick = { onPurchaseRequestChange(false) },
-                            selectedContentColor = AccentColor,
-                            unselectedContentColor = BrandMuted,
-                            text = { Text("No") }
-                        )
-                        Tab(
-                            selected = isPurchaseRequest,
-                            onClick = { onPurchaseRequestChange(true) },
-                            selectedContentColor = AccentColor,
-                            unselectedContentColor = BrandMuted,
-                            text = { Text("Si") }
-                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Confirmar solicitud",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = TitleColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Revisa el resumen antes de enviarlo.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = BodyColor
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cerrar",
+                                tint = BrandMuted
+                            )
+                        }
                     }
                 }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 260.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    sections.forEachIndexed { sectionIndex, section ->
-                        Text(
-                            text = section.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = TitleColor,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        section.items.forEachIndexed { itemIndex, item ->
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = BrandSurface,
+                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.8f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    text = "${itemIndex + 1}. ${item.description} x ${item.quantity}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TitleColor
+                                    text = "Resumen",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BrandMuted
                                 )
-                                item.observations?.let {
-                                    Text(
-                                        text = "Obs: $it",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = BodyColor
+                                Text(
+                                    text = "$totalItems item${if (totalItems == 1) "" else "s"} listo${if (totalItems == 1) "" else "s"}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TitleColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = AccentSoft
+                            ) {
+                                Text(
+                                    text = "Paso final",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AccentColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showPurchaseOption) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.75f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "Solicitud de compra",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = TitleColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                TabRow(
+                                    selectedTabIndex = if (isPurchaseRequest) 1 else 0,
+                                    containerColor = Color.White,
+                                    divider = { HorizontalDivider(color = BrandBorder) }
+                                ) {
+                                    Tab(
+                                        selected = !isPurchaseRequest,
+                                        onClick = { onPurchaseRequestChange(false) },
+                                        selectedContentColor = AccentColor,
+                                        unselectedContentColor = BrandMuted,
+                                        text = { Text("No") }
                                     )
-                                }
-                                item.photoStatus?.let {
-                                    Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = BodyColor
+                                    Tab(
+                                        selected = isPurchaseRequest,
+                                        onClick = { onPurchaseRequestChange(true) },
+                                        selectedContentColor = AccentColor,
+                                        unselectedContentColor = BrandMuted,
+                                        text = { Text("Si") }
                                     )
                                 }
                             }
                         }
-                        if (sectionIndex < sections.lastIndex) {
-                            HorizontalDivider(color = HeaderBorder)
-                        }
+                    }
+                }
+
+                sections.forEach { section ->
+                    item {
+                        RequestConfirmationSectionCard(section = section)
                     }
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Volver")
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirm) {
-                Text("Confirmar y registrar")
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White,
+                shadowElevation = 10.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentColor,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Confirmar solicitud",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Volver", color = BrandMuted)
+                    }
+                }
             }
         }
-    )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RegistrationSuccessSheet(
+    message: String,
+    onClose: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        containerColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFFECFDF3)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(72.dp)
+                        .height(72.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF039855)
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Registro exitoso",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = TitleColor,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BodyColor,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Button(
+                onClick = onClose,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentColor,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = "Continuar",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RequestConfirmationSectionCard(section: RequestConfirmationSection) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = section.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = TitleColor,
+                fontWeight = FontWeight.Bold
+            )
+            section.items.forEachIndexed { index, item ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = BrandSurface
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = item.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TitleColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Cantidad: ${item.quantity}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BodyColor
+                        )
+                        item.observations?.let {
+                            Text(
+                                text = "Observacion: $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BodyColor
+                            )
+                        }
+                        item.photoStatus?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (it.contains("pendiente", ignoreCase = true)) BrandOrange else AccentColor,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+                if (index < section.items.lastIndex) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,21 +13,24 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -100,6 +105,7 @@ fun RoutesScreen(
     val headerTitle = "Rutas"
     val loadingText = if (dayOffset == 1) "Cargando rutas de manana..." else "Cargando rutas..."
     val emptyText = if (dayOffset == 1) "Sin rutas para manana" else "Sin rutas para mostrar"
+    val subtitleText = totalRutas?.let { "$it rutas · ${dayTabs[selectedTabIndex].title}" } ?: "Resumen operativo"
 
     LaunchedEffect(dayOffset, refreshTrigger) {
         isLoading = true
@@ -171,13 +177,11 @@ fun RoutesScreen(
                 .padding(padding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                AppHeader(
+                RoutesTopBar(
                     title = headerTitle,
-                    subtitle = totalRutas?.let { "$it rutas disponibles" } ?: "Resumen de recorridos",
-                    showBackButton = false,
-                    onBackClick = { navController.popBackStack("main", false) },
-                    showNotificationButton = false,
-                    onNotificationClick = { navController.navigate("notifications") }
+                    subtitle = subtitleText,
+                    onRefresh = { refreshTrigger += 1 },
+                    refreshing = isLoading
                 )
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -196,39 +200,21 @@ fun RoutesScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
 
-                            TabRow(selectedTabIndex = selectedTabIndex) {
-                                dayTabs.forEachIndexed { index, tab ->
-                                    Tab(
-                                        selected = selectedTabIndex == index,
-                                        onClick = { selectedTabIndex = index },
-                                        text = { Text(tab.title) }
-                                    )
-                                }
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Button(
-                                    onClick = { refreshTrigger += 1 },
-                                    enabled = !isLoading,
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = BrandBlue,
-                                        contentColor = Color.White
-                                    )
-                                ) {
-                                    Text(text = "Refrescar")
-                                }
-                            }
+                            RoutesSegmentedTabs(
+                                tabs = dayTabs,
+                                selectedIndex = selectedTabIndex,
+                                onSelect = { selectedTabIndex = it }
+                            )
+
+                            RouteStatsRow(routes = routes)
 
                             when {
                                 isLoading -> {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(22.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         color = Color.White,
-                                        border = BorderStroke(1.dp, BrandBorder)
+                                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(20.dp),
@@ -248,9 +234,9 @@ fun RoutesScreen(
                                 !errorMessage.isNullOrEmpty() -> {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(22.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         color = Color.White,
-                                        border = BorderStroke(1.dp, BrandBorder)
+                                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(20.dp),
@@ -275,9 +261,9 @@ fun RoutesScreen(
                                 routes.isEmpty() -> {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(22.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         color = Color.White,
-                                        border = BorderStroke(1.dp, BrandBorder)
+                                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(20.dp),
@@ -337,20 +323,19 @@ private fun RouteCard(
     route: RemoteRoute,
     onOpenTicket: () -> Unit
 ) {
-    val isOpen = !route.estado.equals("cerrado", ignoreCase = true)
-    val accent = if (isOpen) BrandBlue else BrandOrange
-    val accentSoft = if (isOpen) BrandBlueSoft else BrandOrangeSoft
+    val (statusColor, statusBg) = routeStatusColors(route.estado)
 
     Surface(
         onClick = onOpenTicket,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, BrandBorder)
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.65f)),
+        shadowElevation = 1.dp
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -360,12 +345,12 @@ private fun RouteCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = route.number,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         color = BrandText,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = route.agencia,
+                        text = route.cliente.ifBlank { route.agencia.ifBlank { "Cliente no disponible" } },
                         style = MaterialTheme.typography.bodySmall,
                         color = BrandMuted,
                         maxLines = 1,
@@ -375,58 +360,35 @@ private fun RouteCard(
 
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = accentSoft,
-                    border = BorderStroke(1.dp, accentSoft.copy(alpha = 0.9f))
+                    color = statusBg,
+                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.25f))
                 ) {
                     Text(
-                        text = route.estado.ifBlank { "Sin estado" },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        color = accent,
+                        text = route.estado.ifBlank { "Programado" },
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = statusColor,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            HorizontalDivider(color = BrandBorder.copy(alpha = 0.7f))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                DetailBadge(
-                    badge = "F",
+                FilledMetaChip(
+                    icon = Icons.Default.CalendarToday,
                     text = route.fecha.ifBlank { "Sin fecha" },
                     modifier = Modifier.weight(1f)
                 )
-                DetailBadge(
-                    badge = "H",
+                FilledMetaChip(
+                    icon = Icons.Default.Schedule,
                     text = route.hora.ifBlank { "Sin hora" },
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                DetailBadge(
-                    badge = "C",
-                    text = route.cliente.ifBlank { "Sin cliente" },
-                    modifier = Modifier.weight(1f)
-                )
-                DetailBadge(
-                    badge = "E",
-                    text = route.equipo.ifBlank { "Sin equipo" },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Text(
-                text = "Serie: ${route.serie.ifBlank { "N/D" }}",
-                style = MaterialTheme.typography.bodySmall,
-                color = BrandMuted
-            )
 
             Text(
                 text = route.topic.ifBlank { "Servicio sin detalle" },
@@ -443,45 +405,51 @@ private fun RouteCard(
                 overflow = TextOverflow.Ellipsis
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledMetaChip(
+                    icon = Icons.Default.LocationOn,
+                    text = route.agencia.ifBlank { "Ubicacion no disponible" },
+                    modifier = Modifier.weight(1f)
+                )
+                FilledMetaChip(
+                    icon = Icons.Default.Schedule,
+                    text = "Serie ${route.serie.ifBlank { "N/D" }}",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            HorizontalDivider(color = BrandBorder.copy(alpha = 0.55f))
+
             Text(
-                text = "Toca para abrir el ticket",
-                style = MaterialTheme.typography.labelSmall,
-                color = BrandBlueDark
+                text = "Abrir ticket",
+                style = MaterialTheme.typography.labelMedium,
+                color = BrandBlue,
+                fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
 @Composable
-private fun DetailBadge(
-    badge: String,
+private fun FilledMetaChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = BrandSurface,
-        border = BorderStroke(1.dp, BrandBorder)
+        shape = RoundedCornerShape(10.dp),
+        color = BrandSurface
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(18.dp)
-                    .background(BrandBlueSoft, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = badge,
-                    color = BrandBlueDark,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
+            Icon(imageVector = icon, contentDescription = null, tint = BrandMuted, modifier = Modifier.size(14.dp))
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
@@ -490,5 +458,121 @@ private fun DetailBadge(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+@Composable
+private fun RoutesTopBar(
+    title: String,
+    subtitle: String,
+    onRefresh: () -> Unit,
+    refreshing: Boolean
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.65f)),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleMedium, color = BrandText, fontWeight = FontWeight.SemiBold)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = BrandMuted)
+            }
+            IconButton(onClick = onRefresh, enabled = !refreshing) {
+                if (refreshing) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = BrandBlue)
+                } else {
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Refrescar", tint = BrandText)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoutesSegmentedTabs(
+    tabs: List<RouteDayTab>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFEEF1F5),
+        border = BorderStroke(1.dp, Color(0xFFDCE2EA))
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            tabs.forEachIndexed { index, tab ->
+                val selected = index == selectedIndex
+                val interactionSource = remember { MutableInteractionSource() }
+                val pressed by interactionSource.collectIsPressedAsState()
+                Surface(
+                    onClick = { onSelect(index) },
+                    interactionSource = interactionSource,
+                    modifier = Modifier.weight(1f).height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = when {
+                        selected -> Color.White
+                        pressed -> Color(0x0F101828)
+                        else -> Color.Transparent
+                    },
+                    shadowElevation = if (selected) 1.dp else 0.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = tab.title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (selected) BrandText else BrandMuted
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteStatsRow(routes: List<RemoteRoute>) {
+    val pending = routes.count { it.estado.contains("program", ignoreCase = true) || it.estado.contains("pend", ignoreCase = true) }
+    val inRoute = routes.count { it.estado.contains("ruta", ignoreCase = true) || it.estado.contains("proceso", ignoreCase = true) }
+    val delayed = routes.count { it.estado.contains("retras", ignoreCase = true) }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        StatsPill("Programadas", pending.toString(), Modifier.weight(1f))
+        StatsPill("En ruta", inRoute.toString(), Modifier.weight(1f))
+        StatsPill("Retrasadas", delayed.toString(), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun StatsPill(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.65f))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), horizontalAlignment = Alignment.Start) {
+            Text(text = value, style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold)
+            Text(text = label, style = MaterialTheme.typography.labelSmall, color = BrandMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+private fun routeStatusColors(statusRaw: String): Pair<Color, Color> {
+    val status = statusRaw.lowercase()
+    return when {
+        "complet" in status || "cerrad" in status -> Color(0xFF15803D) to Color(0xFFECFDF3)
+        "ruta" in status || "proceso" in status -> Color(0xFF1D4ED8) to Color(0xFFEEF4FF)
+        "retras" in status -> Color(0xFFB45309) to Color(0xFFFFF7ED)
+        "cancel" in status -> Color(0xFFB91C1C) to Color(0xFFFEF2F2)
+        else -> Color(0xFF334155) to Color(0xFFF1F5F9)
     }
 }

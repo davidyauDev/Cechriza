@@ -2,21 +2,20 @@ package com.cechriza.app.ui.solicitudes.list
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +29,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.data.remote.solicitudes.SolicitudesRemoteDataSource
-import com.cechriza.app.ui.home.AppHeader
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.solicitudes.list.components.ComprobanteDetailPanel
@@ -41,7 +39,7 @@ import com.cechriza.app.ui.solicitudes.list.components.MessageCard
 import com.cechriza.app.ui.solicitudes.list.components.ReloadRow
 import com.cechriza.app.ui.solicitudes.list.components.RequestDetailPanel
 import com.cechriza.app.ui.solicitudes.list.components.RequestListCard
-import com.cechriza.app.ui.solicitudes.list.components.RequestTypeDialog
+import com.cechriza.app.ui.solicitudes.list.components.RequestTypeSheet
 import com.cechriza.app.ui.solicitudes.list.components.SolicitudModeTabs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,7 +67,7 @@ fun SolicitudListScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
     var detailEntry by remember { mutableStateOf<RequestEntry?>(null) }
     var detailComprobanteEntry by remember { mutableStateOf<ComprobanteEntry?>(null) }
-    var showRequestTypeDialog by remember { mutableStateOf(false) }
+    var showRequestTypeSheet by remember { mutableStateOf(false) }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -161,27 +159,26 @@ fun SolicitudListScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = BrandSurface,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            AppHeader(
-                title = "Historial",
-                subtitle = "Solicitudes y detalle",
-                showBackButton = showBackButton,
-                onBackClick = { if (showBackButton) navController.popBackStack() },
-                showNotificationButton = false
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showRequestTypeDialog = true },
-                containerColor = BrandBlue,
-                contentColor = Color.White,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-            ) { Icon(imageVector = Icons.Default.Add, contentDescription = "Nueva solicitud") }
+        bottomBar = {
+            Button(
+                onClick = { showRequestTypeSheet = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Nueva solicitud")
+            }
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item { SolicitudModeTabs(mode = mode, onChange = { mode = it }) }
@@ -238,11 +235,11 @@ fun SolicitudListScreen(
             }
         }
 
-        if (showRequestTypeDialog) {
-            RequestTypeDialog(
-                onDismiss = { showRequestTypeDialog = false },
+        if (showRequestTypeSheet) {
+            RequestTypeSheet(
+                onDismiss = { showRequestTypeSheet = false },
                 onSelect = { option ->
-                    showRequestTypeDialog = false
+                    showRequestTypeSheet = false
                     val preset = when (option) {
                         RequestStartOption.Epps -> "epp"
                         RequestStartOption.Almacen -> "almacen"

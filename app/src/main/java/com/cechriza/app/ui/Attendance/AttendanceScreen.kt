@@ -6,6 +6,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -36,7 +39,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,11 +57,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.net.toUri
 import com.cechriza.app.data.local.entity.AttendanceType
-import com.cechriza.app.ui.home.AppHeader
 import com.cechriza.app.ui.home.BrandBorder
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandBlueSoft
@@ -68,7 +68,6 @@ import com.cechriza.app.ui.home.BrandOrange
 import com.cechriza.app.ui.home.BrandOrangeSoft
 import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.home.BrandText
-import com.cechriza.app.ui.home.RoundedTopContainer
 import com.cechriza.app.ui.user.UserViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -194,155 +193,111 @@ fun AttendanceScreen(
                 .background(BrandSurface)
                 .padding(paddingValues)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                AppHeader(
-                    title = "Asistencias",
-                    subtitle = fullName,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
-                        .zIndex(1f),
-                    showBackButton = false,
-                    showNotificationButton = false,
-                    onBackClick = onHomeClick,
-                    onNotificationClick = onNotificationsClick
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Asistencia",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "$headerText · ${registrosUi.size}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
                 )
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    RoundedTopContainer {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(18.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, BrandBorder)
+                            OutlinedButton(
+                                onClick = { openDatePicker() },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Filtro",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = BrandMuted
-                                            )
-                                            Text(
-                                                text = selectedDateLabel.ifBlank { "Todo el historial" },
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = BrandText,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        FilterChip(
-                                            selected = selectedFilter == DayFilter.ALL,
-                                            onClick = {
-                                                if (selectedFilter == DayFilter.ALL) {
-                                                    selectedFilter = DayFilter.CUSTOM
-                                                    customRange = todayRange
-                                                    selectedDateLabel = sdfDate.format(Date(todayRange.first))
-                                                } else {
-                                                    selectedFilter = DayFilter.ALL
-                                                    customRange = null
-                                                    selectedDateLabel = ""
-                                                }
-                                            },
-                                            label = { Text(if (selectedFilter == DayFilter.ALL) "Ver hoy" else "Todas") }
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        OutlinedButton(
-                                            onClick = { openDatePicker() },
-                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.DateRange,
-                                                contentDescription = "Calendario",
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(text = selectedDateLabel.ifBlank { "Elegir fecha" })
-                                        }
-
-                                        if (selectedFilter == DayFilter.CUSTOM) {
-                                            TextButton(onClick = {
-                                                customRange = todayRange
-                                                selectedDateLabel = sdfDate.format(Date(todayRange.first))
-                                                selectedFilter = DayFilter.CUSTOM
-                                            }) {
-                                                Text("Hoy")
-                                            }
-                                        }
-                                    }
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = "Calendario",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = selectedDateLabel.ifBlank { "Elegir fecha" })
                             }
 
-                            Text(
-                                text = "$headerText (${registrosUi.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = BrandText,
-                                fontWeight = FontWeight.SemiBold
+                            FilterChip(
+                                selected = selectedFilter == DayFilter.ALL,
+                                onClick = {
+                                    if (selectedFilter == DayFilter.ALL) {
+                                        selectedFilter = DayFilter.CUSTOM
+                                        customRange = todayRange
+                                        selectedDateLabel = sdfDate.format(Date(todayRange.first))
+                                    } else {
+                                        selectedFilter = DayFilter.ALL
+                                        customRange = null
+                                        selectedDateLabel = ""
+                                    }
+                                },
+                                label = { Text(if (selectedFilter == DayFilter.ALL) "Ver hoy" else "Todas") }
                             )
+                        }
+                    }
+                }
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    if (registrosUi.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (registrosUi.isEmpty()) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(22.dp),
-                                        color = Color.White,
-                                        border = BorderStroke(1.dp, BrandBorder)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(20.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text(
-                                                text = "No hay registros",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = BrandText,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Text(
-                                                text = "Cuando existan marcaciones, apareceran aqui con el mismo estilo del home.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = BrandMuted,
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    LazyColumn(
-                                        modifier = Modifier.fillMaxSize(),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                                        contentPadding = PaddingValues(bottom = 20.dp)
-                                    ) {
-                                        groupedForLazy(registrosUi)
-                                    }
-                                }
+                                Text(
+                                    text = "No hay registros",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = BrandText,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Cuando existan marcaciones apareceran aqui.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandMuted,
+                                    textAlign = TextAlign.Center
+                                )
                             }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 18.dp)
+                        ) {
+                            groupedForLazy(registrosUi)
                         }
                     }
                 }
@@ -360,14 +315,13 @@ private fun LazyListScope.groupedForLazy(items: List<RegistroAsistencia>) {
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                color = BrandSurface,
-                border = BorderStroke(1.dp, BrandBorder)
+                shape = RoundedCornerShape(10.dp),
+                color = Color.Transparent
             ) {
                 Text(
                     text = fecha,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
                     color = BrandText,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -386,18 +340,21 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
     val clipboard = LocalClipboardManager.current
     val isEntrada = registro.tipo == AttendanceType.ENTRADA
     val accent = if (isEntrada) BrandBlue else BrandOrange
-    val accentSoft = if (isEntrada) BrandBlueSoft else BrandOrangeSoft
+    val accentSoft = if (isEntrada) BrandBlueSoft.copy(alpha = 0.6f) else BrandOrangeSoft.copy(alpha = 0.6f)
     val label = if (isEntrada) "Entrada" else "Salida"
     val statusLabel = if (registro.synced) "Sincronizado" else "Pendiente"
+    val statusBg = if (registro.synced) Color(0xFFECFDF3) else Color(0xFFFFF7ED)
+    val statusColor = if (registro.synced) Color(0xFF15803D) else Color(0xFFB45309)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(14.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, BrandBorder)
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f)),
+        shadowElevation = 1.dp
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
@@ -406,7 +363,7 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(34.dp)
                         .background(accentSoft, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -435,13 +392,12 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
 
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = accentSoft,
-                    border = BorderStroke(1.dp, accentSoft.copy(alpha = 0.9f))
+                    color = statusBg
                 ) {
                     Text(
                         text = statusLabel,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        color = accent,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = statusColor,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -460,34 +416,60 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = {
-                    val uri = "geo:${registro.lat},${registro.lon}?q=${registro.lat},${registro.lon}(${Uri.encode(registro.ubicacion)})".toUri()
-                    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                        setPackage("com.google.android.apps.maps")
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandSurface,
+                    modifier = Modifier.clickable {
+                        val uri = "geo:${registro.lat},${registro.lon}?q=${registro.lat},${registro.lon}(${Uri.encode(registro.ubicacion)})".toUri()
+                        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                            setPackage("com.google.android.apps.maps")
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        }
                     }
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Abrir mapa",
+                            tint = BrandBlue,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text("Mapa", style = MaterialTheme.typography.labelMedium, color = BrandText)
                     }
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Place,
-                        contentDescription = "Abrir mapa",
-                        tint = BrandBlue
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Mapa")
                 }
 
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(registro.ubicacion))
-                    Toast.makeText(context, "Ubicacion copiada", Toast.LENGTH_SHORT).show()
-                }) {
-                    Text("Copiar")
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = BrandSurface,
+                    modifier = Modifier.clickable {
+                        clipboard.setText(AnnotatedString(registro.ubicacion))
+                        Toast.makeText(context, "Ubicacion copiada", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copiar",
+                            tint = BrandMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text("Copiar", style = MaterialTheme.typography.labelMedium, color = BrandText)
+                    }
                 }
             }
         }

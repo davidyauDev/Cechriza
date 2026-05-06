@@ -62,6 +62,7 @@ import com.cechriza.app.ui.account.AccountScreen
 import com.cechriza.app.ui.home.HomeScreen
 import com.cechriza.app.ui.home.RoutesScreen
 import com.cechriza.app.ui.login.LoginScreen
+import com.cechriza.app.ui.memory.MemoryMatchScreen
 import com.cechriza.app.ui.solicitudes.create.SolicitudCreateScreen
 import com.cechriza.app.ui.solicitudes.list.SolicitudListScreen
 import kotlinx.coroutines.delay
@@ -213,6 +214,10 @@ fun AppNavigation(navController: NavHostController) {
                     }
                 }
             )
+        }
+
+        composable("memory_match") {
+            MemoryMatchScreen(navController = navController)
         }
 
         composable("solicitudes_list") {

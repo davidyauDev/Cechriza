@@ -109,8 +109,6 @@ fun LoginScreen(
                 email = state.user.email,
                 empCode = state.user.empCode
             )
-
-            userViewModel.saveEmpCode(state.user.empCode)
             onLoginSuccess()
         }
     }
