@@ -67,6 +67,7 @@ jobs:
         run: |
           VERSION_NAME="${GITHUB_REF_NAME#v}"
           VERSION_CODE=$((10000 + GITHUB_RUN_NUMBER))
+          echo "Building with VERSION_NAME=$VERSION_NAME VERSION_CODE=$VERSION_CODE"
           ./gradlew --no-daemon clean bundleRelease \
             -PCI_VERSION_CODE=$VERSION_CODE \
             -PCI_VERSION_NAME="$VERSION_NAME" \
@@ -75,11 +76,22 @@ jobs:
             -Pandroid.injected.signing.key.alias="$ANDROID_SIGNING_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_SIGNING_KEY_PASSWORD"
 
+      - name: Verify generated AAB
+        run: |
+          shopt -s nullglob
+          files=(app/build/outputs/bundle/release/*.aab)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one AAB, found ${#files[@]}"
+            ls -lah app/build/outputs/bundle/release || true
+            exit 1
+          fi
+          ls -lah "${files[0]}"
+
       - name: Upload AAB to Google Play (internal)
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJson: ${{ runner.temp }}/play-store-key.json
-          packageName: com.cechrza.app
+          packageName: com.cechriza.app
           releaseFiles: app/build/outputs/bundle/release/*.aab
           tracks: internal
           status: completed
