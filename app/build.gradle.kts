@@ -6,6 +6,9 @@ plugins {
 
 }
 
+val ciVersionCode = (findProperty("CI_VERSION_CODE") as String?)?.toIntOrNull() ?: 2
+val ciVersionName = (findProperty("CI_VERSION_NAME") as String?) ?: "1.1"
+
 android {
     namespace = "com.cechriza.app"
     compileSdk = 35
@@ -14,8 +17,8 @@ android {
         applicationId = "com.cechrza.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = ciVersionCode
+        versionName = ciVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
