@@ -14,13 +14,18 @@ internal enum class RequestStatus(val label: String, val color: Color) {
 }
 
 internal enum class HistoryMode(val label: String) {
-    Historial("ALMACEN"),
-    Comprobantes("GASTOS")
+    Historial("Almacen"),
+    Comprobantes("Gastos")
 }
 
 internal enum class ComprobanteSource(val label: String) {
     Gastos("Otros"),
     Rrhh("Botas")
+}
+
+internal enum class SolicitudListViewMode(val label: String) {
+    Todo("Todo"),
+    Tabs("Por categorias")
 }
 
 internal data class ComprobanteEntry(
@@ -76,11 +81,13 @@ internal data class RequestItemLine(
     val requested: Int,
     val status: RequestStatus,
     val statusDescription: String,
-    val approvedAt: String
+    val approvedAt: String,
+    val subirActa: Boolean
 )
 
 internal data class RequestEntry(
     val solicitudId: Int,
+    val estadoGeneralId: Int?,
     val id: String,
     val requester: String,
     val email: String,
@@ -89,5 +96,7 @@ internal data class RequestEntry(
     val time: String,
     val status: RequestStatus,
     val statusDescription: String,
+    val subirActa: Boolean,
+    val actaRrhhUrl: String?,
     val items: List<RequestItemLine>
 )

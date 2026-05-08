@@ -8,6 +8,7 @@ import com.cechriza.app.data.remote.dto.response.LoginResponseTotal
 import com.google.gson.JsonElement
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -16,6 +17,7 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 interface ApiService {
     @POST("login")
@@ -99,6 +101,22 @@ interface ApiService {
     @POST("solicitudes-gasto")
     suspend fun registrarSolicitudGasto(
         @Part parts: List<MultipartBody.Part>
+    ): Response<JsonElement>
+
+    @GET
+    suspend fun descargarCompromiso(
+        @Url url: String,
+        @Query("id_solicitud") solicitudId: Int,
+        @Query("id_usuario") userId: Int
+    ): Response<ResponseBody>
+
+    @Multipart
+    @POST
+    suspend fun subirActaFirmada(
+        @Url url: String,
+        @Part("id_solicitud") solicitudId: RequestBody,
+        @Part("id_usuario") userId: RequestBody,
+        @Part actaPdf: MultipartBody.Part
     ): Response<JsonElement>
 
 

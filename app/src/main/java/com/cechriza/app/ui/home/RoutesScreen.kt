@@ -103,7 +103,6 @@ fun RoutesScreen(
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(targetDate)
     }
     val headerTitle = "Rutas"
-    val loadingText = if (dayOffset == 1) "Cargando rutas de manana..." else "Cargando rutas..."
     val emptyText = if (dayOffset == 1) "Sin rutas para manana" else "Sin rutas para mostrar"
     val subtitleText = totalRutas?.let { "$it rutas · ${dayTabs[selectedTabIndex].title}" } ?: "Resumen operativo"
 
@@ -210,25 +209,7 @@ fun RoutesScreen(
 
                             when {
                                 isLoading -> {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
-                                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(20.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            CircularProgressIndicator(color = BrandBlue)
-                                            Text(
-                                                text = loadingText,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = BrandText
-                                            )
-                                        }
-                                    }
+                                    RoutesSkeletonList()
                                 }
 
                                 !errorMessage.isNullOrEmpty() -> {
@@ -431,6 +412,56 @@ private fun RouteCard(
             )
         }
     }
+}
+
+@Composable
+private fun RoutesSkeletonList() {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 20.dp)
+    ) {
+        items(3) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.65f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SkeletonLine(widthFraction = 0.45f, height = 16.dp)
+                    SkeletonLine(widthFraction = 0.70f, height = 12.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        SkeletonLine(widthFraction = 0.48f, height = 30.dp, modifier = Modifier.weight(1f))
+                        SkeletonLine(widthFraction = 0.48f, height = 30.dp, modifier = Modifier.weight(1f))
+                    }
+                    SkeletonLine(widthFraction = 0.95f, height = 13.dp)
+                    SkeletonLine(widthFraction = 0.75f, height = 13.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonLine(
+    widthFraction: Float,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth(widthFraction)
+            .height(height)
+            .background(
+                color = Color(0xFFE9EEF5),
+                shape = RoundedCornerShape(8.dp)
+            )
+    )
 }
 
 @Composable

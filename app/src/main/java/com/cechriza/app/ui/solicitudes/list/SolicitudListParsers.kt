@@ -42,6 +42,8 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             ?: buildStaffName(obj.getObjectOrNull("staff"))
             ?: "Solicitante"
         val tipoSolicitud = extractTipoSolicitud(obj) ?: "Solicitud"
+        val allowSubirActa = obj.get("subir_acta").asBooleanOrFalse()
+        val actaRrhhUrl = obj.get("acta_rrhh_url").asNonBlankStringOrNull()
         val detallesArray = obj.getAsJsonArray("detalles")
         val items = detallesArray
             ?.mapNotNull { detailElement ->
@@ -60,13 +62,15 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
                     requested = detail.get("solicitado").asIntOrZero(),
                     status = detailStatus,
                     statusDescription = detailStatusDescription,
-                    approvedAt = approvedAt
+                    approvedAt = approvedAt,
+                    subirActa = allowSubirActa
                 )
             }
             .orEmpty()
 
         RequestEntry(
             solicitudId = idSolicitud,
+            estadoGeneralId = obj.get("id_estado_general").asIntOrNull(),
             id = "#$idSolicitud",
             requester = requester,
             email = "--",
@@ -75,6 +79,8 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             time = obj.get("fecha_registro").asNonBlankStringOrNull() ?: "--",
             status = status,
             statusDescription = statusDescription,
+            subirActa = allowSubirActa,
+            actaRrhhUrl = actaRrhhUrl,
             items = items
         )
     }
@@ -112,6 +118,17 @@ internal fun JsonElement?.asIntOrZero(): Int {
 internal fun JsonElement?.asNonBlankStringOrNull(): String? {
     if (this == null || isJsonNull || !isJsonPrimitive) return null
     return runCatching { asString.trim() }.getOrNull()?.takeIf { it.isNotBlank() }
+}
+
+internal fun JsonElement?.asBooleanOrFalse(): Boolean {
+    if (this == null || isJsonNull || !isJsonPrimitive) return false
+    val primitive = asJsonPrimitive
+    return when {
+        primitive.isBoolean -> primitive.asBoolean
+        primitive.isString -> primitive.asString.equals("true", ignoreCase = true)
+        primitive.isNumber -> runCatching { primitive.asInt != 0 }.getOrDefault(false)
+        else -> false
+    }
 }
 
 internal fun JsonObject.getObjectOrNull(key: String): JsonObject? {
@@ -195,4 +212,3 @@ internal fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry
         )
     }
 }
-
