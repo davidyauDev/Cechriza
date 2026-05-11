@@ -65,6 +65,7 @@ import com.cechriza.app.ui.login.LoginScreen
 import com.cechriza.app.ui.memory.MemoryMatchScreen
 import com.cechriza.app.ui.solicitudes.create.SolicitudCreateScreen
 import com.cechriza.app.ui.solicitudes.list.SolicitudListScreen
+import com.cechriza.app.ui.solicitudes.qr.QrScannerScreen
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -277,6 +278,29 @@ fun AppNavigation(navController: NavHostController) {
         ) { backStackEntry ->
             val solicitudIdArg = backStackEntry.arguments?.getInt("solicitudId") ?: -1
 
+        }
+
+        composable(
+            route = "solicitud_qr_scanner/{solicitudId}?token={token}",
+            arguments = listOf(
+                navArgument("solicitudId") {
+                    type = NavType.IntType
+                    defaultValue = -1
+                },
+                navArgument("token") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val solicitudId = backStackEntry.arguments?.getInt("solicitudId") ?: -1
+            val qrToken = backStackEntry.arguments?.getString("token")
+            QrScannerScreen(
+                navController = navController,
+                solicitudId = solicitudId,
+                qrToken = qrToken
+            )
         }
 
 

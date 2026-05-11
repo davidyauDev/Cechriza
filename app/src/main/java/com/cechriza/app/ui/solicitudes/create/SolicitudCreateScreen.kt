@@ -87,6 +87,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.cechriza.app.data.model.solicitudes.SolicitudBaseFields
@@ -748,7 +749,6 @@ private fun RegistrationLoadingOverlay() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RequestConfirmationDialog(
     sections: List<RequestConfirmationSection>,
@@ -759,180 +759,186 @@ private fun RequestConfirmationDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White
+    Dialog(
+        onDismissRequest = onDismiss
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.8f))
         ) {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxHeight(0.88f)
             ) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = "Confirmar solicitud",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = TitleColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Revisa el resumen antes de enviarlo.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = BodyColor
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Cerrar",
-                                tint = BrandMuted
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        color = BrandSurface,
-                        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.8f))
-                    ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Text(
-                                    text = "Resumen",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = BrandMuted
-                                )
-                                Text(
-                                    text = "$totalItems item${if (totalItems == 1) "" else "s"} listo${if (totalItems == 1) "" else "s"}",
-                                    style = MaterialTheme.typography.titleMedium,
+                                    text = "Confirmar solicitud",
+                                    style = MaterialTheme.typography.headlineSmall,
                                     color = TitleColor,
                                     fontWeight = FontWeight.Bold
                                 )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = AccentSoft
-                            ) {
                                 Text(
-                                    text = "Paso final",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = AccentColor,
-                                    fontWeight = FontWeight.SemiBold
+                                    text = "Revisa el resumen antes de enviarlo.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = BodyColor
+                                )
+                            }
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cerrar",
+                                    tint = BrandMuted
                                 )
                             }
                         }
                     }
-                }
 
-                if (showPurchaseOption) {
                     item {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(18.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.75f))
+                            color = BrandSurface,
+                            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.8f))
                         ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Solicitud de compra",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = TitleColor,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                TabRow(
-                                    selectedTabIndex = if (isPurchaseRequest) 1 else 0,
-                                    containerColor = Color.White,
-                                    divider = { HorizontalDivider(color = BrandBorder) }
-                                ) {
-                                    Tab(
-                                        selected = !isPurchaseRequest,
-                                        onClick = { onPurchaseRequestChange(false) },
-                                        selectedContentColor = AccentColor,
-                                        unselectedContentColor = BrandMuted,
-                                        text = { Text("No") }
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = "Resumen",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = BrandMuted
                                     )
-                                    Tab(
-                                        selected = isPurchaseRequest,
-                                        onClick = { onPurchaseRequestChange(true) },
-                                        selectedContentColor = AccentColor,
-                                        unselectedContentColor = BrandMuted,
-                                        text = { Text("Si") }
+                                    Text(
+                                        text = "$totalItems item${if (totalItems == 1) "" else "s"} listo${if (totalItems == 1) "" else "s"}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = TitleColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = AccentSoft
+                                ) {
+                                    Text(
+                                        text = "Paso final",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AccentColor,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
                         }
                     }
-                }
 
-                sections.forEach { section ->
                     item {
-                        RequestConfirmationSectionCard(section = section)
+                        if (showPurchaseOption) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.75f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = "Solicitud de compra",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = TitleColor,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    TabRow(
+                                        selectedTabIndex = if (isPurchaseRequest) 1 else 0,
+                                        containerColor = Color.White,
+                                        divider = { HorizontalDivider(color = BrandBorder) }
+                                    ) {
+                                        Tab(
+                                            selected = !isPurchaseRequest,
+                                            onClick = { onPurchaseRequestChange(false) },
+                                            selectedContentColor = AccentColor,
+                                            unselectedContentColor = BrandMuted,
+                                            text = { Text("No") }
+                                        )
+                                        Tab(
+                                            selected = isPurchaseRequest,
+                                            onClick = { onPurchaseRequestChange(true) },
+                                            selectedContentColor = AccentColor,
+                                            unselectedContentColor = BrandMuted,
+                                            text = { Text("Si") }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    sections.forEach { section ->
+                        item {
+                            RequestConfirmationSectionCard(section = section)
+                        }
                     }
                 }
-            }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.White,
-                shadowElevation = 10.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                        .navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    shadowElevation = 10.dp
                 ) {
-                    Button(
-                        onClick = onConfirm,
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentColor,
-                            contentColor = Color.White
-                        )
+                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                            .navigationBarsPadding(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Confirmar solicitud",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Volver", color = BrandMuted)
+                        Button(
+                            onClick = onConfirm,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentColor,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                text = "Confirmar solicitud",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Volver", color = BrandMuted)
+                        }
                     }
                 }
             }

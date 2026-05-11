@@ -3,15 +3,25 @@ package com.cechriza.app.ui.solicitudes.list
 import android.content.Intent
 import android.content.ActivityNotFoundException
 import android.net.Uri
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -29,9 +39,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -59,6 +71,8 @@ import okhttp3.ResponseBody
 import java.io.File
 
 private const val SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY = "solicitud_list_open_botas_tab"
+private const val SOLICITUD_LIST_REFRESH_REQUESTS_KEY = "solicitud_list_refresh_requests_key"
+private const val ESTADO_POR_RECOGER_ID = 27
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,8 +98,10 @@ fun SolicitudListScreen(
     var detailEntry by remember { mutableStateOf<RequestEntry?>(null) }
     var detailComprobanteEntry by remember { mutableStateOf<ComprobanteEntry?>(null) }
     var isUploadingActa by remember { mutableStateOf(false) }
+    var downloadingActaSolicitudId by remember { mutableStateOf<Int?>(null) }
     var uploadDialogTitle by remember { mutableStateOf<String?>(null) }
     var uploadDialogMessage by remember { mutableStateOf<String?>(null) }
+    var previewPdfFile by remember { mutableStateOf<File?>(null) }
     var showRequestTypeSheet by remember { mutableStateOf(false) }
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,6 +111,9 @@ fun SolicitudListScreen(
     val openBotasTabSignal = navBackStackEntry
         ?.savedStateHandle
         ?.get<Long>(SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY)
+    val refreshRequestsSignal = navBackStackEntry
+        ?.savedStateHandle
+        ?.get<Long>(SOLICITUD_LIST_REFRESH_REQUESTS_KEY)
     val uiState = SolicitudListUiState(
         mode = mode,
         source = comprobanteSource,
@@ -113,6 +132,15 @@ fun SolicitudListScreen(
         navBackStackEntry
             ?.savedStateHandle
             ?.remove<Long>(SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY)
+    }
+
+    LaunchedEffect(refreshRequestsSignal) {
+        if (refreshRequestsSignal == null) return@LaunchedEffect
+        mode = HistoryMode.Historial
+        reloadRequestsTick += 1
+        navBackStackEntry
+            ?.savedStateHandle
+            ?.remove<Long>(SOLICITUD_LIST_REFRESH_REQUESTS_KEY)
     }
 
     LaunchedEffect(reloadRequestsTick) {
@@ -258,13 +286,31 @@ fun SolicitudListScreen(
                                 typeBadge = mapRequestCategoryBadge(entry.category),
                                 onDownloadActaClick = {
                                     scope.launch {
-                                        downloadActaForEntry(
-                                            entry = entry,
-                                            context = context,
-                                            snackbarHostState = snackbarHostState
-                                        )
+                                        if (downloadingActaSolicitudId != null) return@launch
+                                        downloadingActaSolicitudId = entry.solicitudId
+                                        try {
+                                            downloadActaForEntry(
+                                                entry = entry,
+                                                context = context,
+                                                snackbarHostState = snackbarHostState,
+                                                onPdfPreviewFallback = { file -> previewPdfFile = file }
+                                            )
+                                        } finally {
+                                            if (downloadingActaSolicitudId == entry.solicitudId) {
+                                                downloadingActaSolicitudId = null
+                                            }
+                                        }
                                     }
-                                }
+                                },
+                                onScanQrClick = if (entry.estadoGeneralId == ESTADO_POR_RECOGER_ID && !entry.qrToken.isNullOrBlank()) {
+                                    {
+                                        val token = Uri.encode(entry.qrToken.orEmpty())
+                                        navController.navigate("solicitud_qr_scanner/${entry.solicitudId}?token=$token")
+                                    }
+                                } else {
+                                    null
+                                },
+                                isDownloadingActa = downloadingActaSolicitudId == entry.solicitudId
                             )
                         }
                     }
@@ -288,13 +334,31 @@ fun SolicitudListScreen(
                                 typeBadge = mapRequestCategoryBadge(entry.category),
                                 onDownloadActaClick = {
                                     scope.launch {
-                                        downloadActaForEntry(
-                                            entry = entry,
-                                            context = context,
-                                            snackbarHostState = snackbarHostState
-                                        )
+                                        if (downloadingActaSolicitudId != null) return@launch
+                                        downloadingActaSolicitudId = entry.solicitudId
+                                        try {
+                                            downloadActaForEntry(
+                                                entry = entry,
+                                                context = context,
+                                                snackbarHostState = snackbarHostState,
+                                                onPdfPreviewFallback = { file -> previewPdfFile = file }
+                                            )
+                                        } finally {
+                                            if (downloadingActaSolicitudId == entry.solicitudId) {
+                                                downloadingActaSolicitudId = null
+                                            }
+                                        }
                                     }
-                                }
+                                },
+                                onScanQrClick = if (entry.estadoGeneralId == ESTADO_POR_RECOGER_ID && !entry.qrToken.isNullOrBlank()) {
+                                    {
+                                        val token = Uri.encode(entry.qrToken.orEmpty())
+                                        navController.navigate("solicitud_qr_scanner/${entry.solicitudId}?token=$token")
+                                    }
+                                } else {
+                                    null
+                                },
+                                isDownloadingActa = downloadingActaSolicitudId == entry.solicitudId
                             )
                         }
                     }
@@ -426,6 +490,18 @@ fun SolicitudListScreen(
                 text = { Text(uploadDialogMessage.orEmpty()) }
             )
         }
+
+        previewPdfFile?.let { file ->
+            ModalBottomSheet(
+                onDismissRequest = { previewPdfFile = null },
+                sheetState = sheetState
+            ) {
+                PdfPreviewPanel(
+                    file = file,
+                    onClose = { previewPdfFile = null }
+                )
+            }
+        }
     }
 }
 
@@ -442,7 +518,8 @@ private fun mapRequestCategoryBadge(category: String): String? {
 private suspend fun downloadActaForEntry(
     entry: RequestEntry,
     context: android.content.Context,
-    snackbarHostState: SnackbarHostState
+    snackbarHostState: SnackbarHostState,
+    onPdfPreviewFallback: (File) -> Unit
 ) {
     val userId = SessionManager.staffId ?: SessionManager.userId
     if (userId == null || userId <= 0) {
@@ -473,19 +550,35 @@ private suspend fun downloadActaForEntry(
     if (response.isSuccessful && contentType.contains("application/pdf") && body != null) {
         val fileName = extractFilenameFromContentDisposition(contentDisposition)
             ?: "compromiso_${entry.solicitudId}.pdf"
-        val savedFile = withContext(Dispatchers.IO) {
-            savePdfFromResponse(
-                responseBody = body,
-                fileName = fileName,
-                targetDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val pdfBytes = withContext(Dispatchers.IO) { runCatching { body.bytes() }.getOrNull() }
+        if (pdfBytes == null || pdfBytes.isEmpty()) {
+            snackbarHostState.showSnackbar("No se pudo leer el PDF descargado")
+            return
+        }
+        val savedInDownloads = withContext(Dispatchers.IO) {
+            savePdfToDownloads(
+                context = context,
+                pdfBytes = pdfBytes,
+                fileName = fileName
             )
         }
-        if (savedFile == null) {
+
+        if (!savedInDownloads) {
             snackbarHostState.showSnackbar("No se pudo guardar el PDF")
         } else {
+            snackbarHostState.showSnackbar("Acta descargada en Descargas: $fileName")
+            val savedFile = withContext(Dispatchers.IO) {
+                savePdfFromBytes(
+                    pdfBytes = pdfBytes,
+                    fileName = fileName,
+                    targetDir = context.getExternalFilesDir(null) ?: context.filesDir
+                )
+            }
+            if (savedFile == null) return
             val opened = openPdfFile(context, savedFile)
             if (!opened) {
-                snackbarHostState.showSnackbar("PDF descargado, pero no hay una app para abrirlo")
+                onPdfPreviewFallback(savedFile)
+                snackbarHostState.showSnackbar("No hay app de PDF. Mostrando vista previa interna.")
             }
         }
         return
@@ -500,15 +593,122 @@ private suspend fun downloadActaForEntry(
     snackbarHostState.showSnackbar(errorMessage)
 }
 
-private fun savePdfFromResponse(responseBody: ResponseBody, fileName: String, targetDir: File): File? {
+@Composable
+private fun PdfPreviewPanel(
+    file: File,
+    onClose: () -> Unit
+) {
+    val firstPageBitmap = remember(file.absolutePath) { renderPdfFirstPage(file) }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { Text("Vista previa del acta") }
+        item {
+            if (firstPageBitmap == null) {
+                MessageCard(
+                    title = "No se pudo previsualizar",
+                    message = "El archivo se descargó, pero no se pudo renderizar."
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Image(
+                        bitmap = firstPageBitmap,
+                        contentDescription = "Primera pagina del acta",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(0.7f)
+                            .verticalScroll(rememberScrollState()),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = onClose,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Cerrar")
+            }
+        }
+    }
+}
+
+private fun renderPdfFirstPage(file: File): androidx.compose.ui.graphics.ImageBitmap? {
+    return runCatching {
+        val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        val renderer = PdfRenderer(descriptor)
+        if (renderer.pageCount <= 0) {
+            renderer.close()
+            descriptor.close()
+            return null
+        }
+        val page = renderer.openPage(0)
+        val bitmap = android.graphics.Bitmap.createBitmap(
+            page.width,
+            page.height,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        page.close()
+        renderer.close()
+        descriptor.close()
+        bitmap.asImageBitmap()
+    }.getOrNull()
+}
+
+private fun savePdfFromBytes(pdfBytes: ByteArray, fileName: String, targetDir: File): File? {
     return runCatching {
         if (!targetDir.exists()) targetDir.mkdirs()
         val outFile = File(targetDir, fileName)
-        responseBody.byteStream().use { input ->
-            outFile.outputStream().use { output -> input.copyTo(output) }
+        outFile.outputStream().use { output ->
+            output.write(pdfBytes)
         }
         outFile
     }.getOrNull()
+}
+
+private fun savePdfToDownloads(
+    context: android.content.Context,
+    pdfBytes: ByteArray,
+    fileName: String
+): Boolean {
+    return runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = android.content.ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            val itemUri = resolver.insert(collection, values) ?: return false
+            resolver.openOutputStream(itemUri)?.use { output ->
+                output.write(pdfBytes)
+            } ?: return false
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(itemUri, values, null, null)
+            true
+        } else {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) downloadsDir.mkdirs()
+            val outFile = File(downloadsDir, fileName)
+            outFile.outputStream().use { output ->
+                output.write(pdfBytes)
+            }
+            true
+        }
+    }.getOrDefault(false)
 }
 
 private fun extractFilenameFromContentDisposition(contentDisposition: String): String? {

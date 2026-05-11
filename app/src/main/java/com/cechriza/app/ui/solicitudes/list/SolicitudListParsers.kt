@@ -37,12 +37,17 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
             ?.get("descripcion")
             .asNonBlankStringOrNull()
             ?: RequestStatus.Reviewed.label
+        val estadoId = obj
+            .getObjectOrNull("estado")
+            ?.get("id_estado")
+            .asIntOrNull()
+        val estadoGeneralId = obj.get("id_estado_general").asIntOrNull() ?: estadoId
         val status = resolveRequestStatus(statusDescription)
         val requester = obj.get("solicitante").asNonBlankStringOrNull()
             ?: buildStaffName(obj.getObjectOrNull("staff"))
             ?: "Solicitante"
         val tipoSolicitud = extractTipoSolicitud(obj) ?: "Solicitud"
-        val allowSubirActa = obj.get("subir_acta").asBooleanOrFalse()
+        val allowSubirActa = obj.get("subir_acta").asBooleanOrFalse() || estadoGeneralId == 41
         val actaRrhhUrl = obj.get("acta_rrhh_url").asNonBlankStringOrNull()
         val detallesArray = obj.getAsJsonArray("detalles")
         val items = detallesArray
@@ -70,7 +75,8 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
 
         RequestEntry(
             solicitudId = idSolicitud,
-            estadoGeneralId = obj.get("id_estado_general").asIntOrNull(),
+            estadoGeneralId = estadoGeneralId,
+            qrToken = obj.get("qr_token").asNonBlankStringOrNull(),
             id = "#$idSolicitud",
             requester = requester,
             email = "--",

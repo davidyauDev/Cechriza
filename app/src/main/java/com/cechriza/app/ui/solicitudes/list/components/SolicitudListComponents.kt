@@ -1,5 +1,7 @@
 package com.cechriza.app.ui.solicitudes.list.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -32,8 +33,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,6 +49,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandBlueDark
 import com.cechriza.app.ui.home.BrandBlueSoft
@@ -65,6 +65,7 @@ import com.cechriza.app.ui.solicitudes.list.RequestEntry
 import com.cechriza.app.ui.solicitudes.list.RequestItemLine
 import com.cechriza.app.ui.solicitudes.list.RequestStartOption
 import com.cechriza.app.ui.solicitudes.list.RequestStatus
+import com.cechriza.app.ui.solicitudes.list.SolicitudListViewMode
 import com.cechriza.app.ui.solicitudes.list.StatusChipStyle
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -124,6 +125,16 @@ private fun formatLatamDateTime(value: String): String {
 internal fun SolicitudModeTabs(mode: HistoryMode, onChange: (HistoryMode) -> Unit) {
     SegmentedTabs(
         options = HistoryMode.values().toList(),
+        selectedOption = mode,
+        labelFor = { it.label },
+        onChange = onChange
+    )
+}
+
+@Composable
+internal fun SolicitudListViewTabs(mode: SolicitudListViewMode, onChange: (SolicitudListViewMode) -> Unit) {
+    SegmentedTabs(
+        options = SolicitudListViewMode.values().toList(),
         selectedOption = mode,
         labelFor = { it.label },
         onChange = onChange
@@ -250,7 +261,11 @@ internal fun MessageCard(title: String, message: String) {
 }
 
 @Composable
-internal fun ComprobanteListCard(entry: ComprobanteEntry, onClick: () -> Unit) {
+internal fun ComprobanteListCard(
+    entry: ComprobanteEntry,
+    onClick: () -> Unit,
+    typeBadge: String? = null
+) {
     val chipStyle = comprobanteStatusChipStyle(entry.statusCode, entry.status)
     val firstDetail = entry.details.firstOrNull()
     val extraDetailsCount = (entry.details.size - 1).coerceAtLeast(0)
@@ -297,8 +312,28 @@ internal fun ComprobanteListCard(entry: ComprobanteEntry, onClick: () -> Unit) {
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Surface(shape = RoundedCornerShape(999.dp), color = chipStyle.background, border = BorderStroke(1.dp, chipStyle.border)) {
-                    Text(text = entry.status, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = chipStyle.foreground, fontWeight = FontWeight.SemiBold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(shape = RoundedCornerShape(999.dp), color = chipStyle.background, border = BorderStroke(1.dp, chipStyle.border)) {
+                        Text(text = entry.status, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = chipStyle.foreground, fontWeight = FontWeight.SemiBold)
+                    }
+                    typeBadge?.takeIf { it.isNotBlank() }?.let { badge ->
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = BrandBlueSoft,
+                            border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
+                        ) {
+                            Text(
+                                text = badge,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandBlue,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
                 Text(text = formatLatamDateTime(entry.date), style = MaterialTheme.typography.bodySmall, color = BrandMuted)
             }
@@ -310,7 +345,11 @@ internal fun ComprobanteListCard(entry: ComprobanteEntry, onClick: () -> Unit) {
 internal fun RequestListCard(
     entry: RequestEntry,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    typeBadge: String? = null,
+    onDownloadActaClick: (() -> Unit)? = null,
+    onScanQrClick: (() -> Unit)? = null,
+    isDownloadingActa: Boolean = false
 ) {
     val firstItem = entry.items.firstOrNull()
     val extraItemsCount = (entry.items.size - 1).coerceAtLeast(0)
@@ -337,8 +376,49 @@ internal fun RequestListCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entry.title.ifBlank { "Solicitud ${entry.id}" },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = BrandText,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    typeBadge?.takeIf { it.isNotBlank() }?.let { badge ->
+                        Text(
+                            text = badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandBlue,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
-
+                Column(horizontalAlignment = Alignment.End) {
+                    if (entry.subirActa && onDownloadActaClick != null) {
+                        TextButton(
+                            onClick = onDownloadActaClick,
+                            enabled = !isDownloadingActa
+                        ) {
+                            if (isDownloadingActa) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Text("Descargando...")
+                                }
+                            } else {
+                                Text("Descargar acta")
+                            }
+                        }
+                    }
+                    if (onScanQrClick != null) {
+                        TextButton(onClick = onScanQrClick) {
+                            Text("Escanear QR")
+                        }
+                    }
+                }
             }
 
             // INFO ROW
@@ -426,7 +506,19 @@ internal fun ComprobanteDetailPanel(entry: ComprobanteEntry, onClose: () -> Unit
 }
 
 @Composable
-internal fun RequestDetailPanel(entry: RequestEntry, onClose: () -> Unit) {
+internal fun RequestDetailPanel(
+    entry: RequestEntry,
+    onClose: () -> Unit,
+    isUploadingActa: Boolean = false,
+    onUploadActaClick: ((solicitudId: Int, selectedFileUri: String) -> Unit)? = null
+) {
+    val pickPdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        val selectedUri = uri?.toString() ?: return@rememberLauncherForActivityResult
+        onUploadActaClick?.invoke(entry.solicitudId, selectedUri)
+    }
+
     Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = Color.White, border = BorderStroke(1.dp, BrandBorder)) {
         LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
@@ -439,6 +531,47 @@ internal fun RequestDetailPanel(entry: RequestEntry, onClose: () -> Unit) {
             }
             item { Text(text = "Items", style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold) }
             items(entry.items, key = { it.id }) { item -> RequestItemCard(item = item) }
+            if (entry.subirActa && onUploadActaClick != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(
+                            onClick = { pickPdfLauncher.launch("application/pdf") },
+                            enabled = !isUploadingActa,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BrandBlue,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            if (isUploadingActa) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color.White
+                                    )
+                                    Text("Subiendo acta...")
+                                }
+                            } else {
+                                Text("Subir acta firmada")
+                            }
+                        }
+                        if (isUploadingActa) {
+                            Text(
+                                text = "Estamos cargando el archivo, por favor espera.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandMuted
+                            )
+                        }
+                    }
+                }
+            }
             item {
                 OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, BrandBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandMuted)) { Text("Cerrar") }
             }
@@ -447,84 +580,63 @@ internal fun RequestDetailPanel(entry: RequestEntry, onClose: () -> Unit) {
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 internal fun RequestTypeSheet(
     onDismiss: () -> Unit,
     onSelect: (RequestStartOption) -> Unit
 ) {
     var selectedOption by remember { mutableStateOf<RequestStartOption?>(null) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color.White
+    Dialog(
+        onDismissRequest = onDismiss
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 620.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, BrandBorder)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                contentPadding = PaddingValues(bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White
             ) {
-                item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         text = "Nueva solicitud",
                         style = MaterialTheme.typography.titleLarge,
                         color = BrandText,
                         fontWeight = FontWeight.SemiBold
                     )
-                }
-                item {
                     Text(
                         text = "Selecciona el tipo para continuar",
                         style = MaterialTheme.typography.bodyMedium,
                         color = BrandMuted
                     )
-                }
-                item {
+
                     RequestTypeOptionCard(
                         option = RequestStartOption.Epps,
                         icon = Icons.Default.Shield,
                         selected = selectedOption == RequestStartOption.Epps,
                         onClick = { selectedOption = RequestStartOption.Epps }
                     )
-                }
-                item {
                     RequestTypeOptionCard(
                         option = RequestStartOption.Almacen,
                         icon = Icons.Default.Inventory2,
                         selected = selectedOption == RequestStartOption.Almacen,
                         onClick = { selectedOption = RequestStartOption.Almacen }
                     )
-                }
-                item {
                     RequestTypeOptionCard(
                         option = RequestStartOption.Gasto,
                         icon = Icons.Default.ReceiptLong,
                         selected = selectedOption == RequestStartOption.Gasto,
                         onClick = { selectedOption = RequestStartOption.Gasto }
                     )
-                }
-            }
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                color = Color.White,
-                shadowElevation = 6.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
                     Button(
                         onClick = { selectedOption?.let(onSelect) },
                         enabled = selectedOption != null,

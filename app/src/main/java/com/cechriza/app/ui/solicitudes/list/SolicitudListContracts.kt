@@ -88,6 +88,7 @@ internal data class RequestItemLine(
 internal data class RequestEntry(
     val solicitudId: Int,
     val estadoGeneralId: Int?,
+    val qrToken: String?,
     val id: String,
     val requester: String,
     val email: String,
