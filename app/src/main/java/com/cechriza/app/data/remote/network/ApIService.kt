@@ -103,6 +103,16 @@ interface ApiService {
         @Part parts: List<MultipartBody.Part>
     ): Response<JsonElement>
 
+    @Multipart
+    @POST("solicitudes-gasto/comprobantes")
+    suspend fun registrarSolicitudGastoComprobante(
+        @Part("solicitud_gasto_id") solicitudGastoId: RequestBody,
+        @Part("tipo") tipo: RequestBody,
+        @Part("numero") numero: RequestBody,
+        @Part("monto") monto: RequestBody,
+        @Part archivo: MultipartBody.Part
+    ): Response<JsonElement>
+
     @GET
     suspend fun descargarCompromiso(
         @Url url: String,

@@ -64,6 +64,7 @@ import com.cechriza.app.ui.home.RoutesScreen
 import com.cechriza.app.ui.login.LoginScreen
 import com.cechriza.app.ui.memory.MemoryMatchScreen
 import com.cechriza.app.ui.solicitudes.create.SolicitudCreateScreen
+import com.cechriza.app.ui.solicitudes.comprobante.ComprobanteFormScreen
 import com.cechriza.app.ui.solicitudes.list.SolicitudListScreen
 import com.cechriza.app.ui.solicitudes.qr.QrScannerScreen
 import kotlinx.coroutines.delay
@@ -83,6 +84,7 @@ import androidx.compose.material.icons.filled.Close
 import java.util.concurrent.TimeUnit
 
 private const val SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY = "solicitud_list_open_botas_tab"
+private const val SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY = "solicitud_list_refresh_comprobantes_key"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -231,7 +233,7 @@ fun AppNavigation(navController: NavHostController) {
                         if (solicitudId.isNotBlank()) {
                             navController.navigate("comprobante_form/$solicitudId")
                         } else {
-                            navController.navigate("comprobante_form")
+                            navController.navigate("comprobante_form/-1")
                         }
                     } else {
                         navController.navigate("solicitudes_create/$preset")
@@ -277,7 +279,16 @@ fun AppNavigation(navController: NavHostController) {
             )
         ) { backStackEntry ->
             val solicitudIdArg = backStackEntry.arguments?.getInt("solicitudId") ?: -1
-
+            ComprobanteFormScreen(
+                navController = navController,
+                initialSolicitudId = solicitudIdArg.takeIf { it > 0 },
+                onRegistered = {
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY, System.currentTimeMillis())
+                    returnToPrevious()
+                }
+            )
         }
 
         composable(
@@ -452,7 +463,7 @@ fun ContentScreen(
                     if (solicitudId.isNotBlank()) {
                         navController.navigate("comprobante_form/$solicitudId")
                     } else {
-                        navController.navigate("comprobante_form")
+                        navController.navigate("comprobante_form/-1")
                     }
                 } else {
                     navController.navigate("solicitudes_create/$preset")

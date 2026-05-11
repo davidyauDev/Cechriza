@@ -72,7 +72,9 @@ import java.io.File
 
 private const val SOLICITUD_LIST_OPEN_BOTAS_TAB_KEY = "solicitud_list_open_botas_tab"
 private const val SOLICITUD_LIST_REFRESH_REQUESTS_KEY = "solicitud_list_refresh_requests_key"
+private const val SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY = "solicitud_list_refresh_comprobantes_key"
 private const val ESTADO_POR_RECOGER_ID = 27
+private const val ESTADO_QR_DISPONIBLE_ID = 7
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,6 +116,9 @@ fun SolicitudListScreen(
     val refreshRequestsSignal = navBackStackEntry
         ?.savedStateHandle
         ?.get<Long>(SOLICITUD_LIST_REFRESH_REQUESTS_KEY)
+    val refreshComprobantesSignal = navBackStackEntry
+        ?.savedStateHandle
+        ?.get<Long>(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY)
     val uiState = SolicitudListUiState(
         mode = mode,
         source = comprobanteSource,
@@ -141,6 +146,15 @@ fun SolicitudListScreen(
         navBackStackEntry
             ?.savedStateHandle
             ?.remove<Long>(SOLICITUD_LIST_REFRESH_REQUESTS_KEY)
+    }
+
+    LaunchedEffect(refreshComprobantesSignal) {
+        if (refreshComprobantesSignal == null) return@LaunchedEffect
+        mode = HistoryMode.Comprobantes
+        reloadComprobantesTick += 1
+        navBackStackEntry
+            ?.savedStateHandle
+            ?.remove<Long>(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY)
     }
 
     LaunchedEffect(reloadRequestsTick) {
@@ -302,7 +316,7 @@ fun SolicitudListScreen(
                                         }
                                     }
                                 },
-                                onScanQrClick = if (entry.estadoGeneralId == ESTADO_POR_RECOGER_ID && !entry.qrToken.isNullOrBlank()) {
+                                onScanQrClick = if (entry.canScanQr()) {
                                     {
                                         val token = Uri.encode(entry.qrToken.orEmpty())
                                         navController.navigate("solicitud_qr_scanner/${entry.solicitudId}?token=$token")
@@ -350,7 +364,7 @@ fun SolicitudListScreen(
                                         }
                                     }
                                 },
-                                onScanQrClick = if (entry.estadoGeneralId == ESTADO_POR_RECOGER_ID && !entry.qrToken.isNullOrBlank()) {
+                                onScanQrClick = if (entry.canScanQr()) {
                                     {
                                         val token = Uri.encode(entry.qrToken.orEmpty())
                                         navController.navigate("solicitud_qr_scanner/${entry.solicitudId}?token=$token")
@@ -513,6 +527,14 @@ private fun mapRequestCategoryBadge(category: String): String? {
         "bota" in normalized || "epp" in normalized || "ssoma" in normalized -> "Botas"
         else -> null
     }
+}
+
+private fun RequestEntry.canScanQr(): Boolean {
+    val estadoId = estadoGeneralId
+    return !qrToken.isNullOrBlank() && (
+        estadoId == ESTADO_POR_RECOGER_ID ||
+            estadoId == ESTADO_QR_DISPONIBLE_ID
+        )
 }
 
 private suspend fun downloadActaForEntry(
