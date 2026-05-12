@@ -64,7 +64,10 @@ internal fun parseRequestEntries(root: JsonElement?): List<RequestEntry> {
                 RequestItemLine(
                     id = "#${detail.get("id_detalle_solicitud").asIntOrZero()}",
                     product = detail.get("producto").asNonBlankStringOrNull() ?: "Producto",
+                    area = detail.get("area").asNonBlankStringOrNull(),
                     requested = detail.get("solicitado").asIntOrZero(),
+                    approved = detail.get("aprobado").asIntOrNull(),
+                    motivo = detail.get("motivo").asNonBlankStringOrNull(),
                     status = detailStatus,
                     statusDescription = detailStatusDescription,
                     approvedAt = approvedAt,
@@ -202,6 +205,29 @@ internal fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry
                 urlImagen = detail.get("url_imagen").asNonBlankStringOrNull() ?: "--"
             )
         }.orEmpty()
+        val comprobanteObj = obj.getObjectOrNull("comprobante")
+        val comprobante = if (comprobanteObj == null) {
+            null
+        } else {
+            val parsed = UploadedComprobante(
+                id = comprobanteObj.get("id").asIntOrNull(),
+                tipo = comprobanteObj.get("tipo").asNonBlankStringOrNull(),
+                numero = comprobanteObj.get("numero").asNonBlankStringOrNull(),
+                monto = comprobanteObj.get("monto").asNonBlankStringOrNull(),
+                archivoUrl = comprobanteObj.get("archivo_url").asNonBlankStringOrNull()
+            )
+            if (
+                parsed.id == null &&
+                parsed.tipo.isNullOrBlank() &&
+                parsed.numero.isNullOrBlank() &&
+                parsed.monto.isNullOrBlank() &&
+                parsed.archivoUrl.isNullOrBlank()
+            ) {
+                null
+            } else {
+                parsed
+            }
+        }
 
         ComprobanteEntry(
             id = "#$id",
@@ -214,6 +240,7 @@ internal fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry
             date = date,
             amount = monto?.let { "S/ $it" },
             areaId = areaId,
+            comprobante = comprobante,
             details = details
         )
     }

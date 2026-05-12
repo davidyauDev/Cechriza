@@ -54,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -1797,6 +1798,12 @@ private fun MaterialItemCard(
                 }
             },
             shape = RoundedCornerShape(18.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFFF3F4F6),
+                unfocusedContainerColor = Color(0xFFF3F4F6),
+                disabledContainerColor = Color(0xFFF3F4F6),
+                errorContainerColor = Color(0xFFF3F4F6)
+            ),
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Next
@@ -1814,6 +1821,12 @@ private fun MaterialItemCard(
             minLines = 2,
             maxLines = 3,
             shape = RoundedCornerShape(18.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFFF3F4F6),
+                unfocusedContainerColor = Color(0xFFF3F4F6),
+                disabledContainerColor = Color(0xFFF3F4F6),
+                errorContainerColor = Color(0xFFF3F4F6)
+            ),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
                 imeAction = ImeAction.Done
@@ -2194,35 +2207,47 @@ private fun DescriptionDropdownField(
     val filteredOptions = filteredCandidates.take(MAX_DROPDOWN_OPTIONS)
     val hasMoreResults = filteredCandidates.size > MAX_DROPDOWN_OPTIONS
 
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val menuWidth = maxWidth
 
         Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = {},
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(52.dp)
                     .clickable { onExpandedChange(!expanded) },
-                placeholder = { Text("Seleccionar item") },
-                trailingIcon = {
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF3F4F6),
+                border = BorderStroke(
+                    1.dp,
+                    if (isError) MaterialTheme.colorScheme.error else Color(0xFFD8DEE9)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = value.ifBlank { "Seleccionar item" },
+                        color = if (value.isBlank()) Color(0xFF6B7280) else Color(0xFF111827),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                     IconButton(onClick = { onExpandedChange(!expanded) }) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = null
+                            contentDescription = null,
+                            tint = Color(0xFF6B7280)
                         )
                     }
-                },
-                readOnly = true,
-                singleLine = true,
-                isError = isError,
-                supportingText = {
-                    supportingText?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                shape = RoundedCornerShape(18.dp)
-            )
+                }
+            }
 
             DropdownMenu(
                 expanded = expanded,
@@ -2230,7 +2255,9 @@ private fun DescriptionDropdownField(
                     query = ""
                     onExpandedChange(false)
                 },
-                modifier = Modifier.width(menuWidth)
+                modifier = Modifier
+                    .width(menuWidth)
+                    .background(Color.White)
             ) {
                 Column(
                     modifier = Modifier
@@ -2251,7 +2278,11 @@ private fun DescriptionDropdownField(
                                 focusManager.clearFocus()
                             }
                         ),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
                     )
 
                     if (filteredOptions.isEmpty()) {
@@ -2274,7 +2305,7 @@ private fun DescriptionDropdownField(
                                     text = {
                                         Text(
                                             text = option.label,
-                                            maxLines = 1,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     },
@@ -2298,6 +2329,10 @@ private fun DescriptionDropdownField(
                     }
                 }
             }
+        }
+    }
+        supportingText?.let {
+            Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

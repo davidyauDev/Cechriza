@@ -23,10 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,10 +42,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -251,6 +256,80 @@ internal fun LoadingCard(text: String) {
 }
 
 @Composable
+internal fun LoadingSkeletonList(items: Int = 3) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        repeat(items) {
+            SkeletonCard()
+        }
+    }
+}
+
+@Composable
+private fun SkeletonCard() {
+    val transition = rememberInfiniteTransition(label = "skeleton")
+    val pulse by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "skeleton-alpha"
+    )
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.55f)
+                    .height(14.dp)
+                    .alpha(pulse)
+                    .background(Color(0xFFE5E7EB), RoundedCornerShape(999.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(12.dp)
+                    .alpha(pulse)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(88.dp)
+                        .height(22.dp)
+                        .alpha(pulse)
+                        .background(Color(0xFFE2E8F0), RoundedCornerShape(999.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .width(110.dp)
+                        .height(12.dp)
+                        .alpha(pulse)
+                        .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun MessageCard(title: String, message: String) {
     Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = Color.White, border = BorderStroke(1.dp, BrandBorder)) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -266,12 +345,67 @@ internal fun ComprobanteListCard(
     onClick: () -> Unit,
     typeBadge: String? = null
 ) {
-    val chipStyle = comprobanteStatusChipStyle(entry.statusCode, entry.status)
+    val chipStyle = when (entry.estadoDetalleId) {
+        15 -> StatusChipStyle(
+            background = Color(0xFFECFDF3),
+            border = Color(0xFFABEFC6),
+            foreground = Color(0xFF067647)
+        )
+        7 -> StatusChipStyle(
+            background = Color(0xFFFFF4E5),
+            border = Color(0xFFF7B267),
+            foreground = Color(0xFFB45309)
+        )
+        9 -> StatusChipStyle(
+            background = Color(0xFFEAF2FF),
+            border = Color(0xFFB8D2FF),
+            foreground = Color(0xFF1D4ED8)
+        )
+        else -> comprobanteStatusChipStyle(entry.statusCode, entry.status)
+    }
     val firstDetail = entry.details.firstOrNull()
     val extraDetailsCount = (entry.details.size - 1).coerceAtLeast(0)
+    val prefix = if (entry.areaId == 11) "EPP" else "Compra"
     Surface(modifier = Modifier.fillMaxWidth().clickable { onClick() }, shape = RoundedCornerShape(22.dp), color = Color.White, border = BorderStroke(1.dp, BrandBorder)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = entry.title, style = MaterialTheme.typography.bodyLarge, color = BrandText, fontWeight = FontWeight.Medium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "$prefix ${entry.id}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = BrandText,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = chipStyle.background,
+                    border = BorderStroke(1.25.dp, chipStyle.border)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (entry.estadoDetalleId == 15) {
+                            Icon(
+                                imageVector = Icons.Default.Payments,
+                                contentDescription = null,
+                                tint = chipStyle.foreground,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Text(
+                            text = entry.status,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = chipStyle.foreground,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
             if (firstDetail != null) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -309,33 +443,49 @@ internal fun ComprobanteListCard(
             entry.seguimientoComentario?.let { Text(text = it, style = MaterialTheme.typography.bodySmall, color = BrandMuted) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(shape = RoundedCornerShape(999.dp), color = chipStyle.background, border = BorderStroke(1.dp, chipStyle.border)) {
-                        Text(text = entry.status, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = chipStyle.foreground, fontWeight = FontWeight.SemiBold)
+                typeBadge?.takeIf { it.isNotBlank() }?.let { badge ->
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = BrandBlueSoft,
+                        border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
+                    ) {
+                        Text(
+                            text = badge,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandBlue,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
-                    typeBadge?.takeIf { it.isNotBlank() }?.let { badge ->
+                }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (entry.comprobante != null) {
                         Surface(
                             shape = RoundedCornerShape(999.dp),
-                            color = BrandBlueSoft,
-                            border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f))
+                            color = Color(0xFFECFDF3),
+                            border = BorderStroke(1.dp, Color(0xFFABEFC6))
                         ) {
                             Text(
-                                text = badge,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                text = "Comprobante cargado",
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = BrandBlue,
+                                color = Color(0xFF067647),
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
+                    Text(
+                        text = "Fecha de creacion: ${formatLatamDateTime(entry.date)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandMuted
+                    )
                 }
-                Text(text = formatLatamDateTime(entry.date), style = MaterialTheme.typography.bodySmall, color = BrandMuted)
             }
         }
     }
@@ -353,6 +503,34 @@ internal fun RequestListCard(
 ) {
     val firstItem = entry.items.firstOrNull()
     val extraItemsCount = (entry.items.size - 1).coerceAtLeast(0)
+    val chipLabelOverride = if (entry.estadoGeneralId == 9) {
+        "Solicitud finalizada"
+    } else {
+        entry.statusDescription
+    }
+    val estadoChipOverride = when (entry.estadoGeneralId) {
+        9 -> StatusChipStyle(
+            background = Color(0xFFECFDF3),
+            border = Color(0xFFABEFC6),
+            foreground = Color(0xFF067647)
+        )
+        20 -> StatusChipStyle(
+            background = Color(0xFFEAF2FF),
+            border = Color(0xFFB8D2FF),
+            foreground = Color(0xFF1D4ED8)
+        )
+        49 -> StatusChipStyle(
+            background = Color(0xFFFFF4E5),
+            border = Color(0xFFF7B267),
+            foreground = Color(0xFFB45309)
+        )
+        27 -> StatusChipStyle(
+            background = Color(0xFFF3E8FF),
+            border = Color(0xFFD8B4FE),
+            foreground = Color(0xFF7E22CE)
+        )
+        else -> null
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -382,20 +560,18 @@ internal fun RequestListCard(
                         color = BrandText,
                         fontWeight = FontWeight.SemiBold
                     )
-                    typeBadge?.takeIf { it.isNotBlank() }?.let { badge ->
-                        Text(
-                            text = badge,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandBlue,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     if (entry.subirActa && onDownloadActaClick != null) {
-                        TextButton(
+                        OutlinedButton(
                             onClick = onDownloadActaClick,
-                            enabled = !isDownloadingActa
+                            enabled = !isDownloadingActa,
+                            shape = RoundedCornerShape(999.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.25f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = BrandBlue
+                            )
                         ) {
                             if (isDownloadingActa) {
                                 Row(
@@ -404,18 +580,56 @@ internal fun RequestListCard(
                                 ) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp
+                                        strokeWidth = 2.dp,
+                                        color = BrandBlue
                                     )
-                                    Text("Descargando...")
+                                    Text(
+                                        text = "Descargando...",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = BrandBlue
+                                    )
                                 }
                             } else {
-                                Text("Descargar acta")
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Descargar acta",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     }
                     if (onScanQrClick != null) {
-                        TextButton(onClick = onScanQrClick) {
-                            Text("Escanear QR")
+                        Button(
+                            onClick = onScanQrClick,
+                            shape = RoundedCornerShape(999.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = BrandBlueSoft,
+                                contentColor = BrandBlue
+                            ),
+                            border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.28f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoCamera,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Escanear QR",
+                                modifier = Modifier.padding(start = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
@@ -429,7 +643,8 @@ internal fun RequestListCard(
             ) {
                 StatusChip(
                     status = entry.status,
-                    labelOverride = entry.statusDescription
+                    labelOverride = chipLabelOverride,
+                    styleOverride = estadoChipOverride
                 )
                 Text(
                     text = formatLatamDateTime(entry.time),
@@ -457,13 +672,20 @@ internal fun RequestListCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Cant: ${firstItem.requested}  ·  Estado: ${firstItem.statusDescription}",
+                            text = "Cant: ${firstItem.requested} | Estado: ${firstItem.statusDescription}",
                             style = MaterialTheme.typography.labelSmall,
                             color = BrandMuted
                         )
+                        firstItem.area?.takeIf { it.isNotBlank() }?.let { area ->
+                            Text(
+                                text = "Area responsable: $area",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandMuted
+                            )
+                        }
                         if (extraItemsCount > 0) {
                             Text(
-                                text = "+$extraItemsCount item(s) más",
+                                text = "+$extraItemsCount item(s) mas",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = BrandBlue,
                                 fontWeight = FontWeight.SemiBold
@@ -495,7 +717,32 @@ internal fun ComprobanteDetailPanel(entry: ComprobanteEntry, onClose: () -> Unit
                     }
                 }
             }
-            if (entry.estadoDetalleId == 9) item {
+            if (entry.comprobante != null) {
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = BorderStroke(1.dp, BrandBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Comprobante cargado",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = BrandText,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            entry.comprobante.tipo?.let { Text("Tipo: $it", style = MaterialTheme.typography.bodySmall, color = BrandMuted) }
+                            entry.comprobante.numero?.let { Text("Numero: $it", style = MaterialTheme.typography.bodySmall, color = BrandMuted) }
+                            entry.comprobante.monto?.let { Text("Monto: S/ $it", style = MaterialTheme.typography.bodySmall, color = BrandMuted) }
+                            entry.comprobante.archivoUrl?.let { Text("Archivo: $it", style = MaterialTheme.typography.bodySmall, color = BrandBlue) }
+                        }
+                    }
+                }
+            } else if (entry.estadoDetalleId == 9) item {
                 Button(onClick = onRegisterComprobanteClick, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = BrandBlue, contentColor = Color.White)) { Text("Registrar comprobante") }
             }
             item {
@@ -620,19 +867,16 @@ internal fun RequestTypeSheet(
 
                     RequestTypeOptionCard(
                         option = RequestStartOption.Epps,
-                        icon = Icons.Default.Shield,
                         selected = selectedOption == RequestStartOption.Epps,
                         onClick = { selectedOption = RequestStartOption.Epps }
                     )
                     RequestTypeOptionCard(
                         option = RequestStartOption.Almacen,
-                        icon = Icons.Default.Inventory2,
                         selected = selectedOption == RequestStartOption.Almacen,
                         onClick = { selectedOption = RequestStartOption.Almacen }
                     )
                     RequestTypeOptionCard(
                         option = RequestStartOption.Gasto,
-                        icon = Icons.Default.ReceiptLong,
                         selected = selectedOption == RequestStartOption.Gasto,
                         onClick = { selectedOption = RequestStartOption.Gasto }
                     )
@@ -667,7 +911,6 @@ internal fun RequestTypeSheet(
 @Composable
 private fun RequestTypeOptionCard(
     option: RequestStartOption,
-    icon: ImageVector,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -688,17 +931,6 @@ private fun RequestTypeOptionCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (selected) BrandBlue.copy(alpha = 0.12f) else BrandSurface
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = if (selected) BrandBlue else BrandMuted,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -721,27 +953,111 @@ private fun RequestTypeOptionCard(
 
 @Composable
 private fun RequestItemCard(item: RequestItemLine) {
-    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), color = BrandSurface, border = BorderStroke(1.dp, BrandBorder)) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = item.id, style = MaterialTheme.typography.labelSmall, color = BrandBlue, fontWeight = FontWeight.Bold)
-                    Text(text = item.product, style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold)
-                }
+    val isRejected = item.status == RequestStatus.Rejected
+    val isApproved = item.status == RequestStatus.Approved
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = BrandSurface,
+        border = BorderStroke(1.dp, BrandBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = item.id,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BrandBlue,
+                    fontWeight = FontWeight.Bold
+                )
                 StatusChip(status = item.status, labelOverride = item.statusDescription)
             }
-            Text(text = "Cantidad: ${item.requested}", style = MaterialTheme.typography.bodyMedium, color = BrandText)
-            Text(text = "Fecha aprobacion: ${item.approvedAt}", style = MaterialTheme.typography.bodySmall, color = BrandMuted)
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Producto: ${item.product}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandText,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!isRejected) {
+                        val quantityText = if (isApproved) {
+                            val approvedQty = item.approved ?: item.requested
+                            "Cant. solicitada: ${item.requested} | Cant. aprobada: $approvedQty"
+                        } else {
+                            "Cant. solicitada: ${item.requested}"
+                        }
+                        Text(
+                            text = "$quantityText | Estado: ${item.statusDescription}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandMuted
+                        )
+                    }
+                    item.area?.takeIf { it.isNotBlank() }?.let { area ->
+                        Text(
+                            text = "Area responsable: $area",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandMuted
+                        )
+                    }
+                    item.motivo?.takeIf { it.isNotBlank() }?.let { motivo ->
+                        Text(
+                            text = "Comentario: $motivo",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandMuted
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Fecha de Atencion: ${item.approvedAt}",
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted
+            )
         }
     }
 }
 
 @Composable
-private fun StatusChip(status: RequestStatus, labelOverride: String? = null) {
-    val style = statusChipStyle(status)
-    Surface(shape = RoundedCornerShape(999.dp), color = style.background, border = BorderStroke(1.dp, style.border)) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = labelOverride?.takeIf { it.isNotBlank() } ?: status.label, style = MaterialTheme.typography.labelSmall, color = style.foreground, fontWeight = FontWeight.SemiBold)
+private fun StatusChip(
+    status: RequestStatus,
+    labelOverride: String? = null,
+    styleOverride: StatusChipStyle? = null
+) {
+    val style = styleOverride ?: statusChipStyle(status)
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = style.background,
+        border = BorderStroke(1.dp, style.border)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = labelOverride?.takeIf { it.isNotBlank() } ?: status.label,
+                style = MaterialTheme.typography.labelMedium,
+                color = style.foreground,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

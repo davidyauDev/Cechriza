@@ -56,7 +56,7 @@ import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.solicitudes.list.components.ComprobanteDetailPanel
 import com.cechriza.app.ui.solicitudes.list.components.ComprobanteListCard
 import com.cechriza.app.ui.solicitudes.list.components.ComprobanteSourceTabs
-import com.cechriza.app.ui.solicitudes.list.components.LoadingCard
+import com.cechriza.app.ui.solicitudes.list.components.LoadingSkeletonList
 import com.cechriza.app.ui.solicitudes.list.components.MessageCard
 import com.cechriza.app.ui.solicitudes.list.components.ReloadRow
 import com.cechriza.app.ui.solicitudes.list.components.RequestDetailPanel
@@ -75,6 +75,7 @@ private const val SOLICITUD_LIST_REFRESH_REQUESTS_KEY = "solicitud_list_refresh_
 private const val SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY = "solicitud_list_refresh_comprobantes_key"
 private const val ESTADO_POR_RECOGER_ID = 27
 private const val ESTADO_QR_DISPONIBLE_ID = 7
+private const val ESTADO_QR_ACTA_ID = 49
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -250,16 +251,6 @@ fun SolicitudListScreen(
         ) {
             item { Text("Vista", color = Color(0xFF344054)) }
             item { SolicitudListViewTabs(mode = viewMode, onChange = { viewMode = it }) }
-            item {
-                Text(
-                    text = if (viewMode == SolicitudListViewMode.Todo) {
-                        "Se muestra todo junto con etiquetas por tipo."
-                    } else {
-                        "Filtra por categoria usando las pestanas de Almacen y Gastos."
-                    },
-                    color = Color(0xFF667085)
-                )
-            }
             if (viewMode == SolicitudListViewMode.Tabs) {
                 item { SolicitudModeTabs(mode = mode, onChange = { mode = it }) }
             }
@@ -269,7 +260,7 @@ fun SolicitudListScreen(
                 item { ReloadRow(onReload = { reloadComprobantesTick += 1 }) }
 
                 when {
-                    uiState.isLoadingComprobantes -> item { LoadingCard("Cargando ${uiState.source.label.lowercase()}...") }
+                    uiState.isLoadingComprobantes -> item { LoadingSkeletonList() }
                     !uiState.comprobantesError.isNullOrBlank() -> item { MessageCard("No se pudo cargar comprobantes", uiState.comprobantesError.orEmpty()) }
                     uiState.comprobantes.isEmpty() -> item { MessageCard("Sin comprobantes", "No hay registros para este usuario.") }
                     else -> {
@@ -277,7 +268,7 @@ fun SolicitudListScreen(
                             ComprobanteListCard(
                                 entry = entry,
                                 onClick = { detailComprobanteEntry = entry },
-                                typeBadge = if (entry.areaId == 11) "Botas" else "Otros"
+                                typeBadge = null
                             )
                         }
                     }
@@ -285,7 +276,7 @@ fun SolicitudListScreen(
             } else if (viewMode == SolicitudListViewMode.Tabs) {
                 item { ReloadRow(onReload = { reloadRequestsTick += 1 }) }
                 when {
-                    uiState.isLoadingRequests -> item { LoadingCard("Cargando solicitudes...") }
+                    uiState.isLoadingRequests -> item { LoadingSkeletonList() }
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar el historial", uiState.requestsError.orEmpty()) }
                     uiState.requests.isEmpty() -> item { MessageCard("Sin solicitudes", "Aun no hay registros para este usuario.") }
                     else -> {
@@ -333,7 +324,7 @@ fun SolicitudListScreen(
                 item { ReloadRow(onReload = { reloadRequestsTick += 1; reloadComprobantesTick += 1 }) }
                 item { Text("Solicitudes de Almacen", color = Color(0xFF344054)) }
                 when {
-                    uiState.isLoadingRequests -> item { LoadingCard("Cargando solicitudes...") }
+                    uiState.isLoadingRequests -> item { LoadingSkeletonList() }
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar solicitudes", uiState.requestsError.orEmpty()) }
                     uiState.requests.isEmpty() -> item { MessageCard("Sin solicitudes", "Aun no hay registros para este usuario.") }
                     else -> {
@@ -378,9 +369,9 @@ fun SolicitudListScreen(
                     }
                 }
 
-                item { Text("Comprobantes de Gasto y Botas", color = Color(0xFF344054)) }
+                item { Text("Solicitud de compras", color = Color(0xFF344054)) }
                 when {
-                    uiState.isLoadingComprobantes -> item { LoadingCard("Cargando comprobantes...") }
+                    uiState.isLoadingComprobantes -> item { LoadingSkeletonList() }
                     !uiState.comprobantesError.isNullOrBlank() -> item { MessageCard("No se pudo cargar comprobantes", uiState.comprobantesError.orEmpty()) }
                     allComprobantes.isEmpty() -> item { MessageCard("Sin comprobantes", "No hay registros para este usuario.") }
                     else -> {
@@ -388,7 +379,7 @@ fun SolicitudListScreen(
                             ComprobanteListCard(
                                 entry = entry,
                                 onClick = { detailComprobanteEntry = entry },
-                                typeBadge = if (entry.areaId == 11) "Botas" else "Gasto"
+                                typeBadge = null
                             )
                         }
                     }
@@ -533,7 +524,8 @@ private fun RequestEntry.canScanQr(): Boolean {
     val estadoId = estadoGeneralId
     return !qrToken.isNullOrBlank() && (
         estadoId == ESTADO_POR_RECOGER_ID ||
-            estadoId == ESTADO_QR_DISPONIBLE_ID
+            estadoId == ESTADO_QR_DISPONIBLE_ID ||
+            estadoId == ESTADO_QR_ACTA_ID
         )
 }
 

@@ -15,12 +15,12 @@ internal enum class RequestStatus(val label: String, val color: Color) {
 
 internal enum class HistoryMode(val label: String) {
     Historial("Almacen"),
-    Comprobantes("Gastos")
+    Comprobantes("Solicitud de compras")
 }
 
 internal enum class ComprobanteSource(val label: String) {
-    Gastos("Otros"),
-    Rrhh("Botas")
+    Gastos("Solicitud de compras"),
+    Rrhh("Botas de Seguridad")
 }
 
 internal enum class SolicitudListViewMode(val label: String) {
@@ -39,7 +39,16 @@ internal data class ComprobanteEntry(
     val date: String,
     val amount: String?,
     val areaId: Int?,
+    val comprobante: UploadedComprobante?,
     val details: List<ComprobanteDetailItem>
+)
+
+internal data class UploadedComprobante(
+    val id: Int?,
+    val tipo: String?,
+    val numero: String?,
+    val monto: String?,
+    val archivoUrl: String?
 )
 
 internal data class ComprobanteDetailItem(
@@ -56,15 +65,15 @@ internal enum class RequestStartOption(
     val description: String
 ) {
     Epps(
-        "Solicitud Botas de Seguridad",
+        "Botas de Seguridad",
         "Area encargada SSOMA"
     ),
     Almacen(
-        "Solicitud Almacen",
+        "Insumos, Herramientas, Calibradores, EPPS",
         "Para materiales o stock del almacen de la empresa."
     ),
     Gasto(
-        "Solicitud de Gasto",
+        "Compras",
         "Cuando compras con tu dinero y luego la empresa te hace el reembolso."
     )
 }
@@ -78,7 +87,10 @@ internal data class StatusChipStyle(
 internal data class RequestItemLine(
     val id: String,
     val product: String,
+    val area: String?,
     val requested: Int,
+    val approved: Int?,
+    val motivo: String?,
     val status: RequestStatus,
     val statusDescription: String,
     val approvedAt: String,

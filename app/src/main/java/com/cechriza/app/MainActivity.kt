@@ -283,9 +283,15 @@ fun AppNavigation(navController: NavHostController) {
                 navController = navController,
                 initialSolicitudId = solicitudIdArg.takeIf { it > 0 },
                 onRegistered = {
+                    val refreshToken = System.currentTimeMillis()
                     navController.previousBackStackEntry
                         ?.savedStateHandle
-                        ?.set(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY, System.currentTimeMillis())
+                        ?.set(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY, refreshToken)
+                    runCatching {
+                        navController.getBackStackEntry("solicitudes_list")
+                            .savedStateHandle
+                            .set(SOLICITUD_LIST_REFRESH_COMPROBANTES_KEY, refreshToken)
+                    }
                     returnToPrevious()
                 }
             )

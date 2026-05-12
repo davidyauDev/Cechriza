@@ -103,16 +103,18 @@ fun AppHeader(
                 }
             }
 
-            HeaderActionSlot(
-                visible = showNotificationButton,
-                onClick = {},
-                icon = Icons.Default.Notifications,
-                contentDescription = "Notificaciones",
-                tint = HeaderNotificationTint,
-                backgroundColor = HeaderNotificationBackground,
-                borderColor = HeaderNotificationBorder,
-                isNotification = true
-            )
+            // Temporalmente oculto: icono de campana
+            // HeaderActionSlot(
+            //     visible = showNotificationButton,
+            //     onClick = {},
+            //     icon = Icons.Default.Notifications,
+            //     contentDescription = "Notificaciones",
+            //     tint = HeaderNotificationTint,
+            //     backgroundColor = HeaderNotificationBackground,
+            //     borderColor = HeaderNotificationBorder,
+            //     isNotification = true
+            // )
+            Box(modifier = Modifier.size(40.dp))
         }
     }
 }
@@ -250,16 +252,18 @@ fun BlueHeaderWithName(
                 )
             }
 
-            HeaderActionSlot(
-                visible = showNotificationButton,
-                onClick = {},
-                icon = Icons.Default.Notifications,
-                contentDescription = "Notificaciones",
-                tint = HeaderNotificationTint,
-                backgroundColor = HeaderNotificationBackground,
-                borderColor = HeaderNotificationBorder,
-                isNotification = true
-            )
+            // Temporalmente oculto: icono de campana
+            // HeaderActionSlot(
+            //     visible = showNotificationButton,
+            //     onClick = {},
+            //     icon = Icons.Default.Notifications,
+            //     contentDescription = "Notificaciones",
+            //     tint = HeaderNotificationTint,
+            //     backgroundColor = HeaderNotificationBackground,
+            //     borderColor = HeaderNotificationBorder,
+            //     isNotification = true
+            // )
+            Box(modifier = Modifier.size(40.dp))
         }
     }
 }

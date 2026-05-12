@@ -255,19 +255,20 @@ private fun HomeTopBar(
                 )
             }
 
-            Surface(
-                onClick = onNotificationClick,
-                shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFF8FAFC)
-            ) {
-                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.NotificationsNone,
-                        contentDescription = "Notificaciones",
-                        tint = BrandText
-                    )
-                }
-            }
+            // Temporalmente oculto: icono de campana
+            // Surface(
+            //     onClick = onNotificationClick,
+            //     shape = RoundedCornerShape(10.dp),
+            //     color = Color(0xFFF8FAFC)
+            // ) {
+            //     Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            //         Icon(
+            //             imageVector = Icons.Default.NotificationsNone,
+            //             contentDescription = "Notificaciones",
+            //             tint = BrandText
+            //         )
+            //     }
+            // }
         }
     }
 }

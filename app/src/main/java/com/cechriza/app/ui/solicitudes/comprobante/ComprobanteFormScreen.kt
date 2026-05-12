@@ -7,21 +7,28 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,6 +50,8 @@ import com.cechriza.app.ui.home.BrandBorder
 import com.cechriza.app.ui.home.BrandMuted
 import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.home.BrandText
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.BorderStroke
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +70,7 @@ fun ComprobanteFormScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var solicitudId by remember { mutableStateOf(initialSolicitudId?.toString().orEmpty()) }
-    var tipo by remember { mutableStateOf("") }
+    var tipo by remember { mutableStateOf("FACTURA") }
     var numero by remember { mutableStateOf("") }
     var monto by remember { mutableStateOf("") }
     var archivoUri by remember { mutableStateOf<Uri?>(null) }
@@ -138,32 +147,54 @@ fun ComprobanteFormScreen(
                 enabled = !isSubmitting
             )
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(14.dp))
-                    .clickable(enabled = !isSubmitting) {
-                        filePicker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "application/pdf"))
-                    }
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = Color.White,
+                border = BorderStroke(1.dp, BrandBorder)
             ) {
-                Text(
-                    text = "Archivo",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = BrandText,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = archivoNombre ?: "Toca aqui para seleccionar JPG, PNG, WEBP o PDF.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (archivoNombre == null) BrandMuted else BrandText
-                )
-                Text(
-                    text = "Maximo 10MB",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandMuted
-                )
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = null,
+                            tint = BrandBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Archivo",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = BrandText,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Text(
+                        text = archivoNombre ?: "Ningun archivo seleccionado",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (archivoNombre == null) BrandMuted else BrandText
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            filePicker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "application/pdf"))
+                        },
+                        enabled = !isSubmitting,
+                        border = BorderStroke(1.dp, BrandBlue.copy(alpha = 0.35f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandBlue)
+                    ) {
+                        Text(if (archivoNombre == null) "Seleccionar archivo" else "Cambiar archivo")
+                    }
+                    Text(
+                        text = "Formatos: JPG, PNG, WEBP o PDF | Maximo 10MB",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandMuted
+                    )
+                }
             }
 
             Button(
