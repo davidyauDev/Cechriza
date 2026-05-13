@@ -61,7 +61,7 @@ private const val TICKET_BASE_URL = "https://osticket.cechriza.com/system/formul
 
 private enum class RouteDayTab(val title: String, val dayOffset: Int) {
     Today("Hoy", 0),
-    Tomorrow("Manana", 1)
+    Tomorrow("Mañana", 1)
 }
 
 data class RemoteRoute(
@@ -159,11 +159,11 @@ fun RoutesScreen(
                 totalRutas = metaTotal ?: parsed.size
                 isLoading = false
             } else {
-                errorMessage = "Error de red: ${resp.code()}"
+                errorMessage = mapRoutesHttpError(resp.code())
                 isLoading = false
             }
-        } catch (_: Exception) {
-            errorMessage = "Error desconocido"
+        } catch (e: Exception) {
+            errorMessage = mapRoutesExceptionToMessage(e)
             isLoading = false
         }
     }
@@ -296,6 +296,25 @@ fun RoutesScreen(
                 }
             }
         }
+    }
+}
+
+private fun mapRoutesHttpError(code: Int): String {
+    return when (code) {
+        401, 403 -> "Tu sesion vencio. Vuelve a iniciar sesion."
+        500, 502, 503, 504 -> "El servidor no esta disponible por ahora. Intenta nuevamente."
+        else -> "No se pudo cargar las rutas. Intenta nuevamente."
+    }
+}
+
+private fun mapRoutesExceptionToMessage(error: Throwable): String {
+    val raw = error.message.orEmpty().lowercase()
+    return when {
+        "unable to resolve host" in raw ||
+            "failed to connect" in raw ||
+            "timeout" in raw ||
+            "socket" in raw -> "Sin conexion. Verifica tu internet e intenta nuevamente."
+        else -> "No se pudo cargar las rutas. Intenta nuevamente."
     }
 }
 

@@ -322,7 +322,7 @@ fun SolicitudListScreen(
                 }
             } else {
                 item { ReloadRow(onReload = { reloadRequestsTick += 1; reloadComprobantesTick += 1 }) }
-                item { Text("Solicitudes de Almacen", color = Color(0xFF344054)) }
+                item { Text("Solicitudes de Economato", color = Color(0xFF344054)) }
                 when {
                     uiState.isLoadingRequests -> item { LoadingSkeletonList() }
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar solicitudes", uiState.requestsError.orEmpty()) }
@@ -513,7 +513,7 @@ fun SolicitudListScreen(
 private fun mapRequestCategoryBadge(category: String): String? {
     val normalized = category.trim().lowercase()
     return when {
-        "almacen" in normalized -> "Almacen"
+        "almacen" in normalized -> "Economato"
         "gasto" in normalized -> "Gasto"
         "bota" in normalized || "epp" in normalized || "ssoma" in normalized -> "Botas"
         else -> null

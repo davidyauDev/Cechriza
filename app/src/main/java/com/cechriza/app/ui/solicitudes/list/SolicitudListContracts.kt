@@ -14,7 +14,7 @@ internal enum class RequestStatus(val label: String, val color: Color) {
 }
 
 internal enum class HistoryMode(val label: String) {
-    Historial("Almacen"),
+    Historial("Economato"),
     Comprobantes("Solicitud de compras")
 }
 
@@ -70,7 +70,7 @@ internal enum class RequestStartOption(
     ),
     Almacen(
         "Insumos, Herramientas, Calibradores, EPPS",
-        "Para materiales o stock del almacen de la empresa."
+        "Para materiales o stock del economato de la empresa."
     ),
     Gasto(
         "Compras",
@@ -101,6 +101,9 @@ internal data class RequestEntry(
     val solicitudId: Int,
     val estadoGeneralId: Int?,
     val qrToken: String?,
+    val empresaAgencia: String?,
+    val numeroOrden: String?,
+    val codOrden: String?,
     val id: String,
     val requester: String,
     val email: String,

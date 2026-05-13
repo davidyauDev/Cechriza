@@ -8,6 +8,8 @@ import androidx.lifecycle.LiveData
 import com.cechriza.app.data.local.entity.Attendance
 import com.cechriza.app.data.local.dao.AttendanceDao
 import com.cechriza.app.data.local.entity.AttendanceType
+import com.cechriza.app.data.remote.dto.request.AttendanceReportEmployeeRequest
+import com.cechriza.app.data.remote.dto.response.AttendanceReportEmployeeItem
 import com.cechriza.app.data.remote.dto.response.AttendanceResponse
 import com.cechriza.app.data.remote.network.RetrofitClient
 import com.cechriza.app.data.preferences.SessionManager
@@ -32,6 +34,39 @@ class AttendanceRepository(
     private val deviceInfo: DeviceInfoProvider = DeviceInfoProvider(context),
     private val locationProvider: LocationProvider = LocationProvider(context)
 ) {
+
+    suspend fun getAttendanceReportByEmployee(
+        employeeId: Int,
+        startDate: String? = null,
+        endDate: String? = null,
+        dates: List<String>? = null
+    ): Result<List<AttendanceReportEmployeeItem>> {
+        return try {
+            val token = SessionManager.token ?: userPreferences.userToken.first()
+            if (token.isNullOrBlank()) {
+                return Result.failure(Exception("Token no disponible"))
+            }
+
+            val request = AttendanceReportEmployeeRequest(
+                empleado_id = employeeId,
+                fecha_inicio = startDate,
+                fecha_fin = endDate,
+                fechas = dates?.takeIf { it.isNotEmpty() }
+            )
+
+            val response = RetrofitClient.apiWithToken { token }
+                .getAttendanceReportByEmployee(request)
+
+            if (response.isSuccessful) {
+                Result.success(response.body()?.data.orEmpty())
+            } else {
+                val rawError = response.errorBody()?.string()
+                Result.failure(Exception("Error ${response.code()}: $rawError"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     suspend fun saveAttendance(
         latitude: Double,

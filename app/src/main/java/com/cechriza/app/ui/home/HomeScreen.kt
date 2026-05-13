@@ -570,8 +570,8 @@ fun HomeScreen(
 
         //  Permisos no concedidos
         val missing = mutableListOf<String>()
-        if (!cameraGranted) missing.add("CÃ¡mara")
-        if (!locationGranted) missing.add("UbicaciÃ³n")
+        if (!cameraGranted) missing.add("Camara")
+        if (!locationGranted) missing.add("Ubicación")
 
         var anyPermanentlyDenied = false
         if (activity != null) {
@@ -597,7 +597,7 @@ fun HomeScreen(
             showAppSettingsDialog = true
         } else {
             coroutineScope.launch {
-                snackbarHostState.showSnackbar("Faltan permisos: ${missing.joinToString(", ")}. Por favor habilÃ­talos.")
+                snackbarHostState.showSnackbar("Faltan permisos: ${missing.joinToString(", ")}. Por favor habilitalos.")
             }
         }
         isCheckingPermissions = false
@@ -613,7 +613,7 @@ fun HomeScreen(
             isCheckingPermissions = false
             showEnableLocationDialog = true
             coroutineScope.launch {
-                val res = snackbarHostState.showSnackbar("GPS desactivado. ActÃ­valo para registrar tu asistencia.", "Abrir ajustes")
+                val res = snackbarHostState.showSnackbar("GPS desactivado. Actívalo para registrar tu asistencia.", "Abrir ajustes")
                 if (res == SnackbarResult.ActionPerformed) openLocationSettings(context)
             }
             return
@@ -644,12 +644,12 @@ fun HomeScreen(
 
                     is LocationResult.Error -> {
                         val message = when (result.reason) {
-                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicaciÃ³n. ActÃ­valos en Ajustes."
-                            LocationError.GPS_DISABLED -> "Tu GPS estÃ¡ desactivado. ActÃ­valo e intÃ©ntalo nuevamente."
-                            LocationError.TIMEOUT -> "El GPS tardÃ³ demasiado en responder. Intenta moverte o verifica la seÃ±al."
-                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicaciÃ³n. Intenta nuevamente."
-                            LocationError.INACCURATE -> "La seÃ±al GPS es imprecisa. Busca un lugar mÃ¡s abierto e intÃ©ntalo otra vez."
-                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicaciÃ³n."
+                            LocationError.PERMISSION_DENIED -> "No tienes permisos de ubicación. Actívalos en Ajustes."
+                            LocationError.GPS_DISABLED -> "Tu GPS está desactivado. Actívalo e inténtalo nuevamente."
+                            LocationError.TIMEOUT -> "El GPS tardó demasiado en responder. Intenta moverte o verifica la señal."
+                            LocationError.NO_LOCATION_AVAILABLE -> "No se pudo obtener tu ubicación. Intenta nuevamente."
+                            LocationError.INACCURATE -> "La señal GPS es imprecisa. Busca un lugar más abierto e inténtalo otra vez."
+                            LocationError.UNKNOWN -> "Error desconocido al obtener la ubicación."
                         }
 
                         // Aseguramos visibilidad: log + toast + snackbar + diÃ¡logo modal
@@ -953,7 +953,7 @@ fun HomeScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = BrandOrange)
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Obteniendo ubicaciÃ³n...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text("Obteniendo Ubicación...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -1036,8 +1036,8 @@ fun HomeScreen(
                             }) { Text("Abrir ajustes") }
                         },
                         dismissButton = { TextButton(onClick = { showMockLocationDialog = false; isCheckingPermissions = false }) { Text("Cancelar") } },
-                        title = { Text("UbicaciÃ³n posiblemente falsa") },
-                        text = { Text(if (mockLocationAppName != null) "Se detectÃ³ que la ubicaciÃ³n podrÃ­a ser falsificada por ${mockLocationAppName}. Desactiva o desinstala esa aplicaciÃ³n y vuelve a intentarlo." else "Se detectÃ³ que la ubicaciÃ³n podrÃ­a ser falsificada. Desactiva apps de ubicaciÃ³n falsa (mock) y vuelve a intentarlo.") }
+                        title = { Text("Ubicación posiblemente falsa") },
+                        text = { Text(if (mockLocationAppName != null) "Se detectá que la ubicación podría ser falsificada por ${mockLocationAppName}. Desactiva o desinstala esa aplicación y vuelve a intentarlo." else "Se detecta que la ubicación podría ser falsificada. Desactiva apps de ubicación falsa (mock) y vuelve a intentarlo.") }
                     )
                 }
 
@@ -1048,7 +1048,7 @@ fun HomeScreen(
                         confirmButton = {
                             TextButton(onClick = { showLocationErrorDialog = false }) { Text("Aceptar") }
                         },
-                        title = { Text("Error de ubicaciÃ³n") },
+                        title = { Text("Error de ubicación") },
                         text = { Text(locationErrorMessage) }
                     )
                 }

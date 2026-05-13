@@ -25,12 +25,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,13 +38,20 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,32 +63,41 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.net.toUri
+import com.cechriza.app.data.local.entity.Attendance
 import com.cechriza.app.data.local.entity.AttendanceType
-import com.cechriza.app.ui.home.BrandBorder
+import com.cechriza.app.data.remote.dto.response.AttendanceReportEmployeeItem
 import com.cechriza.app.ui.home.BrandBlue
 import com.cechriza.app.ui.home.BrandBlueSoft
+import com.cechriza.app.ui.home.BrandBorder
 import com.cechriza.app.ui.home.BrandMuted
 import com.cechriza.app.ui.home.BrandOrange
 import com.cechriza.app.ui.home.BrandOrangeSoft
 import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.home.BrandText
-import com.cechriza.app.ui.user.UserViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 data class RegistroAsistencia(
-    val tipo: AttendanceType,
+    val id: String,
+    val tipoLabel: String,
+    val isEntrada: Boolean,
     val hora: String,
     val ubicacion: String,
     val fecha: String,
     val dayKey: String,
-    val lat: Double,
-    val lon: Double,
-    val synced: Boolean
+    val mapUrl: String?,
+    val imageUrl: String?,
+    val horario: String?,
+    val empleado: String,
+    val dni: String?,
+    val departamento: String?,
+    val empresa: String?,
+    val tecnico: Boolean,
+    val isPendingSync: Boolean = false,
+    val sortTimestamp: Long = 0L
 )
 
 private enum class DayFilter { ALL, CUSTOM }
@@ -94,92 +109,70 @@ fun AttendanceScreen(
     onHomeClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {}
 ) {
-    val userViewModel: UserViewModel = viewModel()
-    val userName by userViewModel.userName.collectAsState()
-    val fullName = remember(userName) {
-        userName.trim().takeIf { it.isNotBlank() } ?: "Usuario"
-    }
+    val reportState by attendanceViewModel.reportUiState.collectAsState()
 
-    val todayRange = remember {
-        val cal = Calendar.getInstance()
-        cal.time = Date()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val start = cal.timeInMillis
-        cal.add(Calendar.DAY_OF_MONTH, 1)
-        val end = cal.timeInMillis - 1
-        Pair(start, end)
+    val todayCalendar = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
     }
+    val initialApiDate = remember { apiDateFormat().format(todayCalendar.time) }
+    val initialLabelDate = remember { displayDateFormat().format(todayCalendar.time) }
 
     var selectedFilter by remember { mutableStateOf(DayFilter.CUSTOM) }
-    var customRange by remember { mutableStateOf<Pair<Long, Long>?>(todayRange) }
-    var selectedDateLabel by remember {
-        mutableStateOf(SimpleDateFormat("dd MMM yyyy", Locale("es")).format(Date(todayRange.first)))
+    var selectedApiDate by remember { mutableStateOf(initialApiDate) }
+    var selectedDateLabel by remember { mutableStateOf(initialLabelDate) }
+    val selectedRange = remember(selectedApiDate) { dayRangeMillis(selectedApiDate) }
+
+    val localAttendances by when (selectedFilter) {
+        DayFilter.ALL -> attendanceViewModel.getAllAttendances().observeAsState(initial = emptyList())
+        DayFilter.CUSTOM -> attendanceViewModel
+            .getAttendancesBetween(selectedRange.first, selectedRange.second)
+            .observeAsState(initial = emptyList())
     }
 
-    fun rangeForFilter(filter: DayFilter): Pair<Long, Long>? {
-        return when (filter) {
-            DayFilter.ALL -> null
-            DayFilter.CUSTOM -> customRange
+    LaunchedEffect(selectedFilter, selectedApiDate) {
+        when (selectedFilter) {
+            DayFilter.ALL -> attendanceViewModel.loadAttendanceReport()
+            DayFilter.CUSTOM -> attendanceViewModel.loadAttendanceReport(dates = listOf(selectedApiDate))
         }
     }
 
-    val selectedRange = rangeForFilter(selectedFilter)
-    val attendanceListLiveData = selectedRange?.let { (start, end) ->
-        attendanceViewModel.getAttendancesBetween(start, end)
-    } ?: attendanceViewModel.getAllAttendances()
-    val allAttendances by attendanceListLiveData.observeAsState(initial = emptyList())
-
     val context = LocalContext.current
-    val sdfDate = SimpleDateFormat("dd MMM yyyy", Locale("es"))
-    val sdfDayKey = SimpleDateFormat("yyyyMMdd", Locale.US)
-    val sdfTime = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     fun openDatePicker() {
-        val c = Calendar.getInstance()
-        val dialog = DatePickerDialog(
+        val current = parseApiDate(selectedApiDate) ?: Date()
+        val c = Calendar.getInstance().apply { time = current }
+        DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
-                val cal = Calendar.getInstance()
-                cal.set(Calendar.YEAR, year)
-                cal.set(Calendar.MONTH, month)
-                cal.set(Calendar.DAY_OF_MONTH, dayOfMonth)
-                cal.set(Calendar.HOUR_OF_DAY, 0)
-                cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0)
-                cal.set(Calendar.MILLISECOND, 0)
-                val start = cal.timeInMillis
-                cal.add(Calendar.DAY_OF_MONTH, 1)
-                val end = cal.timeInMillis - 1
-                customRange = Pair(start, end)
-                selectedDateLabel = sdfDate.format(Date(start))
+                val picked = Calendar.getInstance().apply {
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                }.time
+                selectedApiDate = apiDateFormat().format(picked)
+                selectedDateLabel = displayDateFormat().format(picked)
                 selectedFilter = DayFilter.CUSTOM
             },
             c.get(Calendar.YEAR),
             c.get(Calendar.MONTH),
             c.get(Calendar.DAY_OF_MONTH)
-        )
-        dialog.show()
+        ).show()
     }
 
-    val registrosUi = allAttendances
-        .sortedByDescending { it.timestamp }
-        .map { attendance ->
-            val date = Date(attendance.timestamp)
-            RegistroAsistencia(
-                tipo = attendance.type,
-                hora = sdfTime.format(date),
-                ubicacion = attendance.address?.takeIf { it.isNotBlank() }
-                    ?: "Lat: ${attendance.latitude}, Lon: ${attendance.longitude}",
-                fecha = sdfDate.format(date),
-                dayKey = sdfDayKey.format(date),
-                lat = attendance.latitude,
-                lon = attendance.longitude,
-                synced = attendance.synced
-            )
-        }
+    val registrosUi = remember(reportState.records, localAttendances) {
+        val remote = reportState.records.map { it.toRegistroUi() }
+        val localPending = localAttendances
+            .asSequence()
+            .filter { !it.synced }
+            .map { it.toPendingRegistroUi() }
+            .toList()
+        mergeRegistros(remote, localPending)
+    }
 
     val headerText = when (selectedFilter) {
         DayFilter.ALL -> "Todas las asistencias"
@@ -199,13 +192,6 @@ fun AttendanceScreen(
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Asistencia",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = BrandText,
-                    fontWeight = FontWeight.SemiBold
-                )
                 Text(
                     text = "$headerText · ${registrosUi.size}",
                     style = MaterialTheme.typography.bodySmall,
@@ -244,17 +230,13 @@ fun AttendanceScreen(
                             FilterChip(
                                 selected = selectedFilter == DayFilter.ALL,
                                 onClick = {
-                                    if (selectedFilter == DayFilter.ALL) {
-                                        selectedFilter = DayFilter.CUSTOM
-                                        customRange = todayRange
-                                        selectedDateLabel = sdfDate.format(Date(todayRange.first))
+                                    selectedFilter = if (selectedFilter == DayFilter.ALL) {
+                                        DayFilter.CUSTOM
                                     } else {
-                                        selectedFilter = DayFilter.ALL
-                                        customRange = null
-                                        selectedDateLabel = ""
+                                        DayFilter.ALL
                                     }
                                 },
-                                label = { Text(if (selectedFilter == DayFilter.ALL) "Ver hoy" else "Todas") }
+                                label = { Text(if (selectedFilter == DayFilter.ALL) "Ver por fecha" else "Todas") }
                             )
                         }
                     }
@@ -265,39 +247,43 @@ fun AttendanceScreen(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
-                    if (registrosUi.isEmpty()) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color.White,
-                            border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "No hay registros",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = BrandText,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Cuando existan marcaciones apareceran aqui.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                    when {
+                        reportState.isLoading && registrosUi.isEmpty() -> {
+                            LoadingSkeletonList()
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(bottom = 18.dp)
-                        ) {
-                            groupedForLazy(registrosUi)
+
+                        !reportState.errorMessage.isNullOrBlank() && registrosUi.isEmpty() -> {
+                            ErrorCard(
+                                message = reportState.errorMessage.orEmpty(),
+                                onRetry = {
+                                    when (selectedFilter) {
+                                        DayFilter.ALL -> attendanceViewModel.loadAttendanceReport()
+                                        DayFilter.CUSTOM -> attendanceViewModel.loadAttendanceReport(dates = listOf(selectedApiDate))
+                                    }
+                                }
+                            )
+                        }
+
+                        registrosUi.isEmpty() -> {
+                            MessageCard(
+                                title = "No hay registros",
+                                message = "Cuando existan marcaciones aparecerán aquí."
+                            )
+                        }
+
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 18.dp)
+                            ) {
+                                if (!reportState.errorMessage.isNullOrBlank()) {
+                                    item {
+                                        InlineWarningCard(reportState.errorMessage.orEmpty())
+                                    }
+                                }
+                                groupedForLazy(registrosUi)
+                            }
                         }
                     }
                 }
@@ -328,8 +314,99 @@ private fun LazyListScope.groupedForLazy(items: List<RegistroAsistencia>) {
             }
         }
 
-        items(list) { registro ->
+        items(list, key = { it.id }) { registro ->
             RegistroAsistenciaCard(registro)
+        }
+    }
+}
+
+@Composable
+private fun LoadingSkeletonList(items: Int = 4) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        repeat(items) {
+            SkeletonAttendanceCard()
+        }
+    }
+}
+
+@Composable
+private fun SkeletonAttendanceCard() {
+    val transition = rememberInfiniteTransition(label = "attendance-skeleton")
+    val pulse by transition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "attendance-skeleton-alpha"
+    )
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .alpha(pulse)
+                        .background(Color(0xFFE2E8F0), CircleShape)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.35f)
+                            .height(12.dp)
+                            .alpha(pulse)
+                            .background(Color(0xFFE5E7EB), RoundedCornerShape(999.dp))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.55f)
+                            .height(10.dp)
+                            .alpha(pulse)
+                            .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(10.dp)
+                    .alpha(pulse)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .alpha(pulse)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(10.dp)
+                    .alpha(pulse)
+                    .background(Color(0xFFF1F5F9), RoundedCornerShape(999.dp))
+            )
         }
     }
 }
@@ -338,13 +415,12 @@ private fun LazyListScope.groupedForLazy(items: List<RegistroAsistencia>) {
 fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val isEntrada = registro.tipo == AttendanceType.ENTRADA
-    val accent = if (isEntrada) BrandBlue else BrandOrange
-    val accentSoft = if (isEntrada) BrandBlueSoft.copy(alpha = 0.6f) else BrandOrangeSoft.copy(alpha = 0.6f)
-    val label = if (isEntrada) "Entrada" else "Salida"
-    val statusLabel = if (registro.synced) "Sincronizado" else "Pendiente"
-    val statusBg = if (registro.synced) Color(0xFFECFDF3) else Color(0xFFFFF7ED)
-    val statusColor = if (registro.synced) Color(0xFF15803D) else Color(0xFFB45309)
+    val accent = if (registro.isEntrada) BrandBlue else BrandOrange
+    val accentSoft = if (registro.isEntrada) {
+        BrandBlueSoft.copy(alpha = 0.6f)
+    } else {
+        BrandOrangeSoft.copy(alpha = 0.6f)
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -368,7 +444,7 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isEntrada) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        imageVector = if (registro.isEntrada) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = null,
                         tint = accent
                     )
@@ -378,7 +454,7 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = label,
+                        text = registro.tipoLabel,
                         style = MaterialTheme.typography.titleSmall,
                         color = BrandText,
                         fontWeight = FontWeight.SemiBold
@@ -392,12 +468,12 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
 
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = statusBg
+                    color = if (registro.isPendingSync) Color(0xFFFFF7ED) else Color(0xFFEEF4FF)
                 ) {
                     Text(
-                        text = statusLabel,
+                        text = if (registro.isPendingSync) "Pendiente sync" else if (registro.tecnico) "Tecnico" else "Empleado",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = statusColor,
+                        color = if (registro.isPendingSync) Color(0xFFB45309) else BrandBlue,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -405,10 +481,39 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
             }
 
             Text(
+                text = registro.empleado,
+                style = MaterialTheme.typography.bodyMedium,
+                color = BrandText,
+                fontWeight = FontWeight.Medium
+            )
+
+            val detailLine = buildList {
+                registro.dni?.takeIf { it.isNotBlank() }?.let { add("DNI: $it") }
+                registro.departamento?.takeIf { it.isNotBlank() }?.let { add(it) }
+                registro.empresa?.takeIf { it.isNotBlank() }?.let { add(it) }
+            }.joinToString(" · ")
+
+            if (detailLine.isNotBlank()) {
+                Text(
+                    text = detailLine,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+
+            registro.horario?.takeIf { it.isNotBlank() }?.let { horario ->
+                Text(
+                    text = "Horario programado: $horario",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandMuted
+                )
+            }
+
+            Text(
                 text = registro.ubicacion,
                 style = MaterialTheme.typography.bodySmall,
                 color = BrandMuted,
-                maxLines = 2,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -419,59 +524,274 @@ fun RegistroAsistenciaCard(registro: RegistroAsistencia) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = BrandSurface,
-                    modifier = Modifier.clickable {
-                        val uri = "geo:${registro.lat},${registro.lon}?q=${registro.lat},${registro.lon}(${Uri.encode(registro.ubicacion)})".toUri()
-                        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                            setPackage("com.google.android.apps.maps")
+                registro.mapUrl?.takeIf { it.isNotBlank() }?.let { mapUrl ->
+                    ActionChip(
+                        label = "Mapa",
+                        icon = Icons.Default.LocationOn,
+                        iconTint = BrandBlue,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, mapUrl.toUri()))
                         }
-                        try {
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                        }
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Abrir mapa",
-                            tint = BrandBlue,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text("Mapa", style = MaterialTheme.typography.labelMedium, color = BrandText)
-                    }
+                    )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = BrandSurface,
-                    modifier = Modifier.clickable {
+                registro.imageUrl?.takeIf { it.isNotBlank() }?.let { imageUrl ->
+                    ActionChip(
+                        label = "Foto",
+                        icon = Icons.Default.DateRange,
+                        iconTint = BrandOrange,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(imageUrl)))
+                        }
+                    )
+                }
+
+                ActionChip(
+                    label = "Copiar",
+                    icon = Icons.Default.ContentCopy,
+                    iconTint = BrandMuted,
+                    onClick = {
                         clipboard.setText(AnnotatedString(registro.ubicacion))
                         Toast.makeText(context, "Ubicacion copiada", Toast.LENGTH_SHORT).show()
                     }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copiar",
-                            tint = BrandMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text("Copiar", style = MaterialTheme.typography.labelMedium, color = BrandText)
-                    }
-                }
+                )
             }
         }
     }
 }
+
+@Composable
+private fun ActionChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = BrandSurface,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconTint,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(label, style = MaterialTheme.typography.labelMedium, color = BrandText)
+        }
+    }
+}
+
+@Composable
+private fun MessageCard(title: String, message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = BrandText,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun ErrorCard(message: String, onRetry: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, BrandBorder.copy(alpha = 0.7f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "No se pudo cargar la asistencia",
+                style = MaterialTheme.typography.titleMedium,
+                color = BrandText,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = BrandMuted,
+                textAlign = TextAlign.Center
+            )
+            OutlinedButton(onClick = onRetry) {
+                Text("Reintentar")
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineWarningCard(message: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFFFFBEB),
+        border = BorderStroke(1.dp, Color(0xFFFDE68A))
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF92400E)
+        )
+    }
+}
+
+private fun mergeRegistros(
+    remote: List<RegistroAsistencia>,
+    localPending: List<RegistroAsistencia>
+): List<RegistroAsistencia> {
+    val keys = remote.map { dedupeKey(it) }.toHashSet()
+    val merged = buildList {
+        addAll(remote)
+        localPending.forEach { local ->
+            if (dedupeKey(local) !in keys) add(local)
+        }
+    }
+    return merged.sortedByDescending { it.sortTimestamp }
+}
+
+private fun dedupeKey(item: RegistroAsistencia): String {
+    return "${item.dayKey}|${item.hora}|${item.tipoLabel.lowercase()}|${item.ubicacion.trim().lowercase()}"
+}
+
+private fun AttendanceReportEmployeeItem.toRegistroUi(): RegistroAsistencia {
+    val rawDate = fechaHoraMarcacion ?: fecha.orEmpty()
+    val parsedDate = parseRemoteDate(rawDate)
+    val displayFecha = parsedDate?.let { displayDateFormat().format(it) } ?: (fecha ?: "-")
+    val dayKey = parsedDate?.let { dayKeyFormat().format(it) } ?: (fecha ?: idMarcacion.toString())
+    val displayHora = horaMarcacion
+        ?.takeIf { it.isNotBlank() }
+        ?: parsedDate?.let { hourFormat().format(it) }
+        ?: "-"
+    val firstName = nombres.orEmpty().trim()
+    val lastName = apellidos.orEmpty().trim()
+    val fullName = listOf(firstName, lastName).filter { it.isNotBlank() }.joinToString(" ")
+    val typeCode = tipoMarcacion.orEmpty().trim()
+    val isEntrada = typeCode == "0"
+
+    return RegistroAsistencia(
+        id = (idMarcacion ?: 0).toString() + "-" + rawDate,
+        tipoLabel = when (typeCode) {
+            "0" -> "Entrada"
+            "1" -> "Salida"
+            else -> "Marcacion"
+        },
+        isEntrada = isEntrada,
+        hora = displayHora,
+        ubicacion = ubicacion?.takeIf { it.isNotBlank() } ?: "Sin ubicacion registrada",
+        fecha = displayFecha,
+        dayKey = dayKey,
+        mapUrl = mapUrl?.takeIf { it.isNotBlank() },
+        imageUrl = imagen?.takeIf { it.isNotBlank() },
+        horario = horario?.takeIf { it.isNotBlank() },
+        empleado = fullName.ifBlank { "Empleado #${empleadoId ?: "-"}" },
+        dni = dni?.takeIf { it.isNotBlank() },
+        departamento = departamento?.takeIf { it.isNotBlank() },
+        empresa = empresa?.takeIf { it.isNotBlank() },
+        tecnico = tecnico == true,
+        isPendingSync = false,
+        sortTimestamp = parsedDate?.time ?: 0L
+    )
+}
+
+private fun Attendance.toPendingRegistroUi(): RegistroAsistencia {
+    val date = Date(timestamp)
+    val isEntrada = type == AttendanceType.ENTRADA
+    return RegistroAsistencia(
+        id = "local-$id-$timestamp",
+        tipoLabel = if (isEntrada) "Entrada" else "Salida",
+        isEntrada = isEntrada,
+        hora = hourFormat().format(date),
+        ubicacion = address?.takeIf { it.isNotBlank() } ?: "Lat: $latitude, Lon: $longitude",
+        fecha = displayDateFormat().format(date),
+        dayKey = dayKeyFormat().format(date),
+        mapUrl = "https://www.google.com/maps?q=$latitude,$longitude",
+        imageUrl = null,
+        horario = null,
+        empleado = "Registro local",
+        dni = null,
+        departamento = null,
+        empresa = null,
+        tecnico = true,
+        isPendingSync = true,
+        sortTimestamp = timestamp
+    )
+}
+
+private fun parseRemoteDate(value: String?): Date? {
+    if (value.isNullOrBlank()) return null
+    val patterns = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd"
+    )
+    for (pattern in patterns) {
+        try {
+            return SimpleDateFormat(pattern, Locale.US).apply {
+                isLenient = false
+            }.parse(value)
+        } catch (_: Exception) {
+        }
+    }
+    return null
+}
+
+private fun parseApiDate(value: String): Date? {
+    return try {
+        apiDateFormat().parse(value)
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun dayRangeMillis(apiDate: String): Pair<Long, Long> {
+    val date = parseApiDate(apiDate) ?: Date()
+    val startCal = Calendar.getInstance().apply {
+        time = date
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val start = startCal.timeInMillis
+    val end = start + 86_400_000L - 1L
+    return start to end
+}
+
+private fun apiDateFormat() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+private fun displayDateFormat() = SimpleDateFormat("dd MMM yyyy", Locale("es"))
+
+private fun dayKeyFormat() = SimpleDateFormat("yyyyMMdd", Locale.US)
+
+private fun hourFormat() = SimpleDateFormat("HH:mm", Locale.getDefault())

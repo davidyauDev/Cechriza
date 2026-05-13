@@ -447,11 +447,11 @@ fun SolicitudCreateScreen(
                         solicitanteUserId = solicitanteUserId,
                         context = context,
                         areaId = ALMACEN_SOLICITUD_GENERAL_AREA_ID,
-                        motivo = "Solicitud general de almacen",
+                        motivo = "Solicitud general de economato",
                         fallbackPrefix = "general",
-                        defaultErrorMessage = "No hay items validos para registrar en almacen.",
-                        backendErrorMessage = "No se pudo registrar la solicitud de almacen",
-                        backendSuccessMessage = "Solicitud de almacen registrada correctamente."
+                        defaultErrorMessage = "No hay items validos para registrar en economato.",
+                        backendErrorMessage = "No se pudo registrar la solicitud de economato",
+                        backendSuccessMessage = "Solicitud de economato registrada correctamente."
                     )
                 } else {
                     submitCompleteRequest(
@@ -504,7 +504,7 @@ fun SolicitudCreateScreen(
                     val flowLabel = when {
                         isEppOnlyFlow -> "Solicitud de Botas de seguridad"
                         isGastoFlow -> "Solicitud de Gasto"
-                        isAlmacenFlow -> "Solicitud de Almacen"
+                        isAlmacenFlow -> "Solicitud de Economato"
                         else -> "Nueva solicitud"
                     }
                     Surface(

@@ -22,6 +22,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,14 +35,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cechriza.app.ui.Attendance.AttendanceViewModel
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
 fun LastMarkText(viewModel: AttendanceViewModel) {
-    val lastAttendanceState = viewModel.getLastAttendance().observeAsState()
-    val lastAttendance = lastAttendanceState.value
+    val attendancesTodayState = viewModel.getAttendancesOfToday().observeAsState(initial = emptyList())
+    val localLastAttendance = attendancesTodayState.value.maxByOrNull { it.timestamp }
+    val reportState by viewModel.reportUiState.collectAsState()
+    val apiDate = rememberTodayApiDate()
+
+    LaunchedEffect(apiDate) {
+        viewModel.loadAttendanceReport(dates = listOf(apiDate))
+    }
+
+    val remoteLastMark = reportState.records
+        .filter { !it.fechaHoraMarcacion.isNullOrBlank() || !it.horaMarcacion.isNullOrBlank() || !it.fecha.isNullOrBlank() }
+        .maxByOrNull {
+            parseRemoteAttendanceDate(it.fechaHoraMarcacion ?: "${it.fecha.orEmpty()} ${it.horaMarcacion.orEmpty()}")?.time
+                ?: Long.MIN_VALUE
+        }
 
     Column(
         modifier = Modifier
@@ -64,11 +81,23 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
             shadowElevation = 1.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (lastAttendance != null) {
-                val date = Date(lastAttendance.timestamp)
+            if (remoteLastMark != null || localLastAttendance != null) {
+                val parsedRemoteDate = remoteLastMark?.let {
+                    parseRemoteAttendanceDate(it.fechaHoraMarcacion)
+                        ?: parseRemoteAttendanceDate("${it.fecha.orEmpty()} ${it.horaMarcacion.orEmpty()}")
+                }
+                val localDate = localLastAttendance?.let { Date(it.timestamp) }
+                val date = parsedRemoteDate ?: localDate ?: Date()
                 val formattedTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
                 val formattedDate = SimpleDateFormat("dd MMM", Locale.getDefault()).format(date)
-                val type = lastAttendance.type.name.uppercase()
+                val type = when {
+                    remoteLastMark != null -> when (remoteLastMark.tipoMarcacion?.trim()) {
+                        "0" -> "ENTRADA"
+                        "1" -> "SALIDA"
+                        else -> "ENTRADA"
+                    }
+                    else -> localLastAttendance?.type?.name?.uppercase().orEmpty()
+                }
 
                 val (accent, label, icon) = when (type) {
                     "ENTRADA" -> Triple(BrandBlue, "Entrada", Icons.Default.KeyboardArrowUp)
@@ -139,7 +168,7 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Registro completado correctamente",
+                            text = if (remoteLastMark != null) "Registro del servidor" else "Registro completado correctamente",
                             style = MaterialTheme.typography.bodySmall,
                             color = BrandMuted,
                             maxLines = 1,
@@ -155,13 +184,13 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Sin marcaciones todavia",
+                        text = "Sin marcaciones hoy",
                         style = MaterialTheme.typography.bodyMedium,
                         color = BrandText,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Tu ultima asistencia aparecera aqui cuando registres entrada o salida.",
+                        text = "La asistencia de hoy aparecera aqui cuando registres entrada o salida.",
                         style = MaterialTheme.typography.bodySmall,
                         color = BrandMuted
                     )
@@ -169,4 +198,27 @@ fun LastMarkText(viewModel: AttendanceViewModel) {
             }
         }
     }
+}
+
+private fun rememberTodayApiDate(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    return formatter.format(Date())
+}
+
+private fun parseRemoteAttendanceDate(value: String?): Date? {
+    if (value.isNullOrBlank()) return null
+    val patterns = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd"
+    )
+    patterns.forEach { pattern ->
+        try {
+            return SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }.parse(value)
+        } catch (_: ParseException) {
+        } catch (_: Exception) {
+        }
+    }
+    return null
 }

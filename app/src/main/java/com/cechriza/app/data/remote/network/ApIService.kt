@@ -2,7 +2,9 @@
 
 import com.cechriza.app.data.remote.dto.request.LoginRequest
 import com.cechriza.app.data.remote.dto.request.MemoryMatchScoreRequest
+import com.cechriza.app.data.remote.dto.request.AttendanceReportEmployeeRequest
 import com.cechriza.app.data.remote.dto.response.AttendanceResponse
+import com.cechriza.app.data.remote.dto.response.AttendanceReportEmployeeResponse
 import com.cechriza.app.data.remote.dto.response.EventosHoyResponse
 import com.cechriza.app.data.remote.dto.response.LoginResponseTotal
 import com.google.gson.JsonElement
@@ -51,6 +53,11 @@ interface ApiService {
 
     @GET("eventos/hoy")
     suspend fun getEventosHoy(): Response<EventosHoyResponse>
+
+    @POST("reporte-asistencia/technicians/empleado")
+    suspend fun getAttendanceReportByEmployee(
+        @Body request: AttendanceReportEmployeeRequest
+    ): Response<AttendanceReportEmployeeResponse>
 
     @GET("inventario/productos")
     suspend fun getInventarioProductos(

@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.cechriza.app.ui.home.BrandBlue
@@ -501,6 +502,7 @@ internal fun RequestListCard(
     onScanQrClick: (() -> Unit)? = null,
     isDownloadingActa: Boolean = false
 ) {
+    val uriHandler = LocalUriHandler.current
     val firstItem = entry.items.firstOrNull()
     val extraItemsCount = (entry.items.size - 1).coerceAtLeast(0)
     val chipLabelOverride = if (entry.estadoGeneralId == 9) {
@@ -694,6 +696,48 @@ internal fun RequestListCard(
                     }
                 }
             }
+            entry.empresaAgencia?.let { empresaAgencia ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF4F7FF),
+                    border = BorderStroke(1.dp, Color(0xFFD6E4FF))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Empresa / Agencia: $empresaAgencia",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandText
+                        )
+                        entry.numeroOrden?.let { numeroOrden ->
+                            Text(
+                                text = "Numero de orden: $numeroOrden",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandMuted
+                            )
+                        }
+                        entry.codOrden?.let { codOrden ->
+                            Text(
+                                text = "Codigo de orden: $codOrden",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandMuted
+                            )
+                        }
+                        Text(
+                            text = "Seguimiento: https://www.olvacourier.com/",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandBlue,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                uriHandler.openUri("https://www.olvacourier.com/")
+                            }
+                        )
+                    }
+                }
+            }
 
         }
     }
@@ -759,6 +803,7 @@ internal fun RequestDetailPanel(
     isUploadingActa: Boolean = false,
     onUploadActaClick: ((solicitudId: Int, selectedFileUri: String) -> Unit)? = null
 ) {
+    val uriHandler = LocalUriHandler.current
     val pickPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -777,6 +822,50 @@ internal fun RequestDetailPanel(
                 }
             }
             item { Text(text = "Items", style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold) }
+            entry.empresaAgencia?.let { empresaAgencia ->
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF4F7FF),
+                        border = BorderStroke(1.dp, Color(0xFFD6E4FF))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Empresa / Agencia: $empresaAgencia",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandText
+                            )
+                            entry.numeroOrden?.let { numeroOrden ->
+                                Text(
+                                    text = "Numero de orden: $numeroOrden",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandMuted
+                                )
+                            }
+                            entry.codOrden?.let { codOrden ->
+                                Text(
+                                    text = "Codigo de orden: $codOrden",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandMuted
+                                )
+                            }
+                            Text(
+                                text = "Seguimiento en OLVA: https://www.olvacourier.com/",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandBlue,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable {
+                                    uriHandler.openUri("https://www.olvacourier.com/")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             items(entry.items, key = { it.id }) { item -> RequestItemCard(item = item) }
             if (entry.subirActa && onUploadActaClick != null) {
                 item {

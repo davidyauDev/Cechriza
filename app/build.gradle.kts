@@ -17,8 +17,9 @@ android {
         applicationId = "com.cechrza.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = ciVersionCode
-        versionName = ciVersionName
+        versionCode = 10010
+        versionName = "1.1.10"
+
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
