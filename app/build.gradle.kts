@@ -3,11 +3,13 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-kapt")
-
 }
 
 val ciVersionCode = (findProperty("CI_VERSION_CODE") as String?)?.toIntOrNull() ?: 2
 val ciVersionName = (findProperty("CI_VERSION_NAME") as String?) ?: "1.1"
+val courierMobileApiKey = (findProperty("COURIER_MOBILE_API_KEY") as String?)
+    ?: System.getenv("COURIER_MOBILE_API_KEY")
+    ?: "courier-mobile-ydz-2026"
 
 android {
     namespace = "com.cechriza.app"
@@ -17,11 +19,10 @@ android {
         applicationId = "com.cechrza.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10010
-        versionName = "1.1.10"
-
-
+        versionCode = 10011
+        versionName = "1.1.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "COURIER_MOBILE_API_KEY", "\"$courierMobileApiKey\"")
     }
 
     buildTypes {
@@ -42,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -86,8 +88,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.5.0")
 
 
-    // ROOM
-    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-runtime:2.7.2")
     kapt("androidx.room:room-compiler:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
 

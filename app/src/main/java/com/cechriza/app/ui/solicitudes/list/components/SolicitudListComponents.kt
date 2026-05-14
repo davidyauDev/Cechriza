@@ -66,6 +66,7 @@ import com.cechriza.app.ui.home.BrandSurface
 import com.cechriza.app.ui.home.BrandText
 import com.cechriza.app.ui.solicitudes.list.ComprobanteEntry
 import com.cechriza.app.ui.solicitudes.list.ComprobanteSource
+import com.cechriza.app.ui.solicitudes.list.CourierTrackingInfo
 import com.cechriza.app.ui.solicitudes.list.HistoryMode
 import com.cechriza.app.ui.solicitudes.list.RequestEntry
 import com.cechriza.app.ui.solicitudes.list.RequestItemLine
@@ -73,7 +74,9 @@ import com.cechriza.app.ui.solicitudes.list.RequestStartOption
 import com.cechriza.app.ui.solicitudes.list.RequestStatus
 import com.cechriza.app.ui.solicitudes.list.SolicitudListViewMode
 import com.cechriza.app.ui.solicitudes.list.StatusChipStyle
-import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val SegmentedContainerColor = Color(0xFFEEF1F5)
@@ -82,6 +85,15 @@ private val SegmentedActiveColor = Color.White
 private val SegmentedPressedOverlay = Color(0x0F101828)
 private val SegmentedInactiveText = Color(0xFF667085)
 private val SegmentedActiveText = Color(0xFF0F172A)
+private val LatamLocale = Locale("es", "PE")
+private val InputDateTimeFormatters = listOf(
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS")
+)
+private val InputDateOnlyFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+private val OutputDateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a", LatamLocale)
+private val OutputDateOnlyFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", LatamLocale)
 
 internal fun statusChipStyle(status: RequestStatus): StatusChipStyle {
     return when (status) {
@@ -107,24 +119,15 @@ internal fun comprobanteStatusChipStyle(statusCode: String?, statusLabel: String
 private fun formatLatamDateTime(value: String): String {
     val raw = value.trim()
     if (raw.isBlank()) return "-"
-
-    val inputPatterns = listOf(
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd'T'HH:mm:ss",
-        "yyyy-MM-dd"
-    )
-
-    val output = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "PE"))
-    val outputDateOnly = SimpleDateFormat("dd/MM/yyyy", Locale("es", "PE"))
-    for (pattern in inputPatterns) {
-        try {
-            val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
-            val parsed = parser.parse(raw) ?: continue
-            return if (pattern == "yyyy-MM-dd") outputDateOnly.format(parsed) else output.format(parsed)
-        } catch (_: Exception) {
-        }
+    for (formatter in InputDateTimeFormatters) {
+        val formatted = runCatching {
+            LocalDateTime.parse(raw, formatter).format(OutputDateTimeFormatter)
+        }.getOrNull()
+        if (formatted != null) return formatted
     }
-    return raw
+    return runCatching {
+        LocalDate.parse(raw, InputDateOnlyFormatter).format(OutputDateOnlyFormatter)
+    }.getOrElse { raw }
 }
 
 @Composable
@@ -495,6 +498,8 @@ internal fun ComprobanteListCard(
 @Composable
 internal fun RequestListCard(
     entry: RequestEntry,
+    courierTracking: CourierTrackingInfo? = null,
+    isLoadingTracking: Boolean = false,
     selected: Boolean,
     onClick: () -> Unit,
     typeBadge: String? = null,
@@ -502,7 +507,6 @@ internal fun RequestListCard(
     onScanQrClick: (() -> Unit)? = null,
     isDownloadingActa: Boolean = false
 ) {
-    val uriHandler = LocalUriHandler.current
     val firstItem = entry.items.firstOrNull()
     val extraItemsCount = (entry.items.size - 1).coerceAtLeast(0)
     val chipLabelOverride = if (entry.estadoGeneralId == 9) {
@@ -696,48 +700,12 @@ internal fun RequestListCard(
                     }
                 }
             }
-            entry.empresaAgencia?.let { empresaAgencia ->
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFF4F7FF),
-                    border = BorderStroke(1.dp, Color(0xFFD6E4FF))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Empresa / Agencia: $empresaAgencia",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandText
-                        )
-                        entry.numeroOrden?.let { numeroOrden ->
-                            Text(
-                                text = "Numero de orden: $numeroOrden",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandMuted
-                            )
-                        }
-                        entry.codOrden?.let { codOrden ->
-                            Text(
-                                text = "Codigo de orden: $codOrden",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandMuted
-                            )
-                        }
-                        Text(
-                            text = "Seguimiento: https://www.olvacourier.com/",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandBlue,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable {
-                                uriHandler.openUri("https://www.olvacourier.com/")
-                            }
-                        )
-                    }
-                }
-            }
+            CourierTrackingCard(
+                entry = entry,
+                tracking = courierTracking,
+                isLoading = isLoadingTracking,
+                compact = true
+            )
 
         }
     }
@@ -799,11 +767,12 @@ internal fun ComprobanteDetailPanel(entry: ComprobanteEntry, onClose: () -> Unit
 @Composable
 internal fun RequestDetailPanel(
     entry: RequestEntry,
+    courierTracking: CourierTrackingInfo? = null,
+    isLoadingTracking: Boolean = false,
     onClose: () -> Unit,
     isUploadingActa: Boolean = false,
     onUploadActaClick: ((solicitudId: Int, selectedFileUri: String) -> Unit)? = null
 ) {
-    val uriHandler = LocalUriHandler.current
     val pickPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -822,48 +791,14 @@ internal fun RequestDetailPanel(
                 }
             }
             item { Text(text = "Items", style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold) }
-            entry.empresaAgencia?.let { empresaAgencia ->
+            if (!entry.empresaAgencia.isNullOrBlank()) {
                 item {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFF4F7FF),
-                        border = BorderStroke(1.dp, Color(0xFFD6E4FF))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Empresa / Agencia: $empresaAgencia",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandText
-                            )
-                            entry.numeroOrden?.let { numeroOrden ->
-                                Text(
-                                    text = "Numero de orden: $numeroOrden",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
-                            }
-                            entry.codOrden?.let { codOrden ->
-                                Text(
-                                    text = "Codigo de orden: $codOrden",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandMuted
-                                )
-                            }
-                            Text(
-                                text = "Seguimiento en OLVA: https://www.olvacourier.com/",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandBlue,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.clickable {
-                                    uriHandler.openUri("https://www.olvacourier.com/")
-                                }
-                            )
-                        }
-                    }
+                    CourierTrackingCard(
+                        entry = entry,
+                        tracking = courierTracking,
+                        isLoading = isLoadingTracking,
+                        compact = false
+                    )
                 }
             }
             items(entry.items, key = { it.id }) { item -> RequestItemCard(item = item) }
@@ -912,6 +847,124 @@ internal fun RequestDetailPanel(
                 OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, BrandBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandMuted)) { Text("Cerrar") }
             }
         }
+    }
+}
+
+@Composable
+private fun CourierTrackingCard(
+    entry: RequestEntry,
+    tracking: CourierTrackingInfo?,
+    isLoading: Boolean,
+    compact: Boolean
+) {
+    val uriHandler = LocalUriHandler.current
+    val providerName = tracking?.agencia ?: entry.empresaAgencia ?: return
+    val textStyle = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall
+    val trackingUrl = tracking?.fallbackUrl?.takeIf { it.isNotBlank() } ?: defaultCourierUrl(providerName)
+    val statusLabel = tracking?.estadoNombre ?: tracking?.estadoActual
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFF4F7FF),
+        border = BorderStroke(1.dp, Color(0xFFD6E4FF))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Empresa / Agencia: ${providerName.uppercase()}",
+                style = textStyle,
+                color = BrandText
+            )
+            (tracking?.numero ?: entry.numeroOrden)?.takeIf { it.isNotBlank() }?.let { numeroOrden ->
+                Text(
+                    text = "Numero de orden: $numeroOrden",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            (tracking?.codigo ?: entry.codOrden)?.takeIf { it.isNotBlank() }?.let { codOrden ->
+                Text(
+                    text = "Codigo de orden: $codOrden",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            tracking?.ticket?.takeIf { it.isNotBlank() }?.let { ticket ->
+                Text(
+                    text = "Ticket: $ticket",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            when {
+                isLoading -> {
+                    Text(
+                        text = "Consultando seguimiento...",
+                        style = textStyle,
+                        color = BrandMuted
+                    )
+                }
+                !statusLabel.isNullOrBlank() -> {
+                    Text(
+                        text = "Estado: $statusLabel",
+                        style = textStyle,
+                        color = BrandText,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            tracking?.fecha?.takeIf { it.isNotBlank() }?.let { fecha ->
+                Text(
+                    text = "Fecha: ${formatLatamDateTime(fecha)}",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            tracking?.detalleManual?.takeIf { it.isNotBlank() }?.let { detalle ->
+                Text(
+                    text = "Detalle: $detalle",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            tracking?.comentario?.takeIf { it.isNotBlank() }?.let { comentario ->
+                Text(
+                    text = "Comentario: $comentario",
+                    style = textStyle,
+                    color = BrandMuted
+                )
+            }
+            tracking?.comprobanteUrl?.takeIf { it.isNotBlank() }?.let { comprobanteUrl ->
+                Text(
+                    text = "Comprobante: $comprobanteUrl",
+                    style = textStyle,
+                    color = BrandBlue,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { uriHandler.openUri(comprobanteUrl) }
+                )
+            }
+            trackingUrl?.let { url ->
+                Text(
+                    text = "Seguimiento: $url",
+                    style = textStyle,
+                    color = BrandBlue,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { uriHandler.openUri(url) }
+                )
+            }
+        }
+    }
+}
+
+private fun defaultCourierUrl(empresaAgencia: String): String? {
+    val normalized = empresaAgencia.trim().lowercase()
+    return when {
+        "olva" in normalized -> "https://tracking.olvaexpress.pe/"
+        "shalom" in normalized || "shalon" in normalized -> "https://www.shalom.pe/"
+        else -> null
     }
 }
 

@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cechriza.app.R
@@ -62,8 +64,10 @@ import com.google.accompanist.systemuicontroller.rememberSystemUiController
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
-    userViewModel: UserViewModel = viewModel()
+    userViewModel: UserViewModel? = null
 ) {
+    val isPreview = LocalInspectionMode.current
+    val resolvedUserViewModel = if (isPreview) null else (userViewModel ?: viewModel())
     val api = remember { RetrofitClient.apiWithoutToken }
     val repository = remember { AuthRepository(api) }
     val loginViewModel: LoginViewModel = viewModel(
@@ -92,13 +96,13 @@ fun LoginScreen(
     LaunchedEffect(loginState) {
         val state = loginState
         if (state is LoginState.Success) {
-            userViewModel.setUserInMemory(
+            resolvedUserViewModel?.setUserInMemory(
                 state.user.name,
                 state.token,
                 state.user.id,
                 state.user.email
             )
-            userViewModel.setEmpCodeInMemory(state.user.empCode)
+            resolvedUserViewModel?.setEmpCodeInMemory(state.user.empCode)
 
             SessionManager.setSession(
                 context = context,
@@ -159,23 +163,17 @@ fun LoginScreen(
             Image(
                 painter = painterResource(id = R.drawable.logo_cechriza),
                 contentDescription = "Logo de la empresa",
-                modifier = Modifier.size(164.dp)
+                modifier = Modifier.size(200.dp)
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
-                text = "Iniciar sesion",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF101828),
-                textAlign = TextAlign.Center
-            )
+
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Ingresa tu codigo de empleado y contraseña",
+                text = "Ingresa tu codigo de empleado y contraseñasdadsa",
                 style = MaterialTheme.typography.bodyMedium,
                 color = mutedText,
                 textAlign = TextAlign.Center,
@@ -302,5 +300,13 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LoginScreenPreview() {
+    MaterialTheme {
+        LoginScreen(onLoginSuccess = {})
     }
 }

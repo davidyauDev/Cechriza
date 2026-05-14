@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -97,6 +96,8 @@ fun SolicitudListScreen(
     var requests by remember { mutableStateOf<List<RequestEntry>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var trackingBySolicitud by remember { mutableStateOf<Map<Int, CourierTrackingInfo>>(emptyMap()) }
+    var trackingLoadingIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var detailEntry by remember { mutableStateOf<RequestEntry?>(null) }
     var detailComprobanteEntry by remember { mutableStateOf<ComprobanteEntry?>(null) }
@@ -161,6 +162,8 @@ fun SolicitudListScreen(
     LaunchedEffect(reloadRequestsTick) {
         isLoading = true
         errorMessage = null
+        trackingBySolicitud = emptyMap()
+        trackingLoadingIds = emptySet()
         val solicitanteUserId = SessionManager.staffId ?: SessionManager.userId
         if (solicitanteUserId == null || solicitanteUserId <= 0) {
             isLoading = false
@@ -183,6 +186,32 @@ fun SolicitudListScreen(
         } finally {
             isLoading = false
         }
+    }
+
+    LaunchedEffect(requests) {
+        val courierRequests = requests.filter { !it.empresaAgencia.isNullOrBlank() }
+        if (courierRequests.isEmpty()) {
+            trackingLoadingIds = emptySet()
+            return@LaunchedEffect
+        }
+
+        trackingLoadingIds = courierRequests.map { it.solicitudId }.toSet()
+        val fetchedTracking = withContext(Dispatchers.IO) {
+            courierRequests.mapNotNull { entry ->
+                val response = runCatching {
+                    SolicitudesRemoteDataSource.consultarCourierTracking(
+                        solicitudId = entry.solicitudId,
+                        empresaAgencia = entry.empresaAgencia.orEmpty()
+                    )
+                }.getOrNull() ?: return@mapNotNull null
+
+                if (!response.isSuccessful) return@mapNotNull null
+                val parsed = parseCourierTrackingInfo(response.body()) ?: return@mapNotNull null
+                entry.solicitudId to parsed
+            }.toMap()
+        }
+        trackingBySolicitud = fetchedTracking
+        trackingLoadingIds = emptySet()
     }
 
     LaunchedEffect(mode, comprobanteSource, viewMode, reloadComprobantesTick) {
@@ -280,9 +309,14 @@ fun SolicitudListScreen(
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar el historial", uiState.requestsError.orEmpty()) }
                     uiState.requests.isEmpty() -> item { MessageCard("Sin solicitudes", "Aun no hay registros para este usuario.") }
                     else -> {
-                        itemsIndexed(uiState.requests, key = { index, entry -> "${entry.id}-$index" }) { _, entry ->
+                        items(
+                            items = uiState.requests,
+                            key = { entry -> "${entry.solicitudId}-${entry.id}" }
+                        ) { entry ->
                             RequestListCard(
                                 entry = entry,
+                                courierTracking = trackingBySolicitud[entry.solicitudId],
+                                isLoadingTracking = entry.solicitudId in trackingLoadingIds,
                                 selected = entry.id == selectedId,
                                 onClick = {
                                     selectedId = entry.id
@@ -328,9 +362,14 @@ fun SolicitudListScreen(
                     !uiState.requestsError.isNullOrBlank() -> item { MessageCard("No se pudo cargar solicitudes", uiState.requestsError.orEmpty()) }
                     uiState.requests.isEmpty() -> item { MessageCard("Sin solicitudes", "Aun no hay registros para este usuario.") }
                     else -> {
-                        itemsIndexed(uiState.requests, key = { index, entry -> "${entry.id}-$index" }) { _, entry ->
+                        items(
+                            items = uiState.requests,
+                            key = { entry -> "${entry.solicitudId}-${entry.id}" }
+                        ) { entry ->
                             RequestListCard(
                                 entry = entry,
+                                courierTracking = trackingBySolicitud[entry.solicitudId],
+                                isLoadingTracking = entry.solicitudId in trackingLoadingIds,
                                 selected = entry.id == selectedId,
                                 onClick = {
                                     selectedId = entry.id
@@ -391,6 +430,8 @@ fun SolicitudListScreen(
             ModalBottomSheet(onDismissRequest = { detailEntry = null }, sheetState = sheetState) {
                 RequestDetailPanel(
                     entry = entry,
+                    courierTracking = trackingBySolicitud[entry.solicitudId],
+                    isLoadingTracking = entry.solicitudId in trackingLoadingIds,
                     onClose = { detailEntry = null },
                     isUploadingActa = isUploadingActa,
                     onUploadActaClick = { solicitudId, selectedFileUri ->

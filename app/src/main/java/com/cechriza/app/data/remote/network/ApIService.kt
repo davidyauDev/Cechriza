@@ -14,6 +14,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 import retrofit2.http.Path
@@ -134,6 +135,14 @@ interface ApiService {
         @Part("id_solicitud") solicitudId: RequestBody,
         @Part("id_usuario") userId: RequestBody,
         @Part actaPdf: MultipartBody.Part
+    ): Response<JsonElement>
+
+    @POST
+    suspend fun consultarCourierTracking(
+        @Url url: String,
+        @Header("X-API-Key") apiKey: String,
+        @Header("Authorization") authorization: String,
+        @Body body: Map<String, Int>
     ): Response<JsonElement>
 
 

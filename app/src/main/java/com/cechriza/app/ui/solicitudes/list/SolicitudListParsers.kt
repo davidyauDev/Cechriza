@@ -148,6 +148,36 @@ internal fun JsonObject.getObjectOrNull(key: String): JsonObject? {
     return if (value.isJsonObject) value.asJsonObject else null
 }
 
+internal fun parseCourierTrackingInfo(root: JsonElement?): CourierTrackingInfo? {
+    val rootObject = root?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+    val tracking = rootObject.getObjectOrNull("tracking")
+    val solicitud = rootObject.getObjectOrNull("solicitud")
+
+    val agencia = tracking?.get("agencia").asNonBlankStringOrNull()
+        ?: solicitud?.get("empresa_agencia").asNonBlankStringOrNull()
+        ?: return null
+
+    return CourierTrackingInfo(
+        agencia = agencia,
+        ticket = tracking?.get("ticket").asNonBlankStringOrNull(),
+        numero = tracking?.get("numero").asNonBlankStringOrNull()
+            ?: solicitud?.get("numero_orden").asNonBlankStringOrNull(),
+        codigo = tracking?.get("codigo").asNonBlankStringOrNull()
+            ?: solicitud?.get("cod_orden").asNonBlankStringOrNull(),
+        estadoGeneral = tracking?.get("estado_general").asIntOrNull(),
+        estadoNombre = tracking?.get("estado_nombre").asNonBlankStringOrNull(),
+        estadoActual = tracking?.get("estado_actual").asNonBlankStringOrNull(),
+        fecha = tracking?.get("fecha").asNonBlankStringOrNull(),
+        comprobanteUrl = tracking?.get("comprobante_url").asNonBlankStringOrNull()
+            ?: solicitud?.get("comprobante_url").asNonBlankStringOrNull(),
+        fallbackUrl = tracking?.get("fallback_url").asNonBlankStringOrNull(),
+        comentario = tracking?.get("comentario").asNonBlankStringOrNull()
+            ?: solicitud?.get("comentario_adicional").asNonBlankStringOrNull(),
+        detalleManual = tracking?.get("detalle_manual").asNonBlankStringOrNull()
+            ?: tracking?.get("detalle").asNonBlankStringOrNull()
+    )
+}
+
 internal fun parseComprobantesEntries(root: JsonElement?): List<ComprobanteEntry> {
     val dataArray = root
         ?.takeIf { it.isJsonObject }

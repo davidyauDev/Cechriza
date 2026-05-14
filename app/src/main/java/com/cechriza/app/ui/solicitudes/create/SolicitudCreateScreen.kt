@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -190,6 +191,8 @@ private data class MaterialItemForm(
     val quantity: String = "",
     val selectedInventoryId: Int? = null,
     val selectedAreaId: Int? = null,
+    val isNewProduct: Boolean = false,
+    val newProductName: String = "",
     val description: String = "",
     val requiresPreviousProductPhoto: Boolean = false,
     val observations: String = "",
@@ -215,6 +218,11 @@ private fun buildRequestConfirmationSections(
     return sections.mapNotNull { section ->
         val summaryItems = section.items.map { item ->
             val quantity = item.quantity.toIntOrNull()?.toString() ?: item.quantity.ifBlank { "0" }
+            val productName = if (item.isNewProduct && item.newProductName.isNotBlank()) {
+                item.newProductName.trim()
+            } else {
+                item.description
+            }
             val photoStatus = if (!item.requiresPreviousProductPhoto) {
                 null
             } else if (item.hasAttachedPhoto()) {
@@ -225,7 +233,7 @@ private fun buildRequestConfirmationSections(
 
             RequestConfirmationItem(
                 quantity = quantity,
-                description = item.description,
+                description = productName,
                 observations = item.observations.trim().takeIf { it.isNotBlank() },
                 photoStatus = photoStatus
             )
@@ -260,7 +268,8 @@ fun SolicitudCreateScreen(
     onHomeClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onRegisterSuccess: () -> Unit = {},
-    initialPreset: String? = null
+    initialPreset: String? = null,
+    screenTitle: String = "Solicitudes"
 ) {
     val context = LocalContext.current
     val materialsSection = remember {
@@ -397,16 +406,74 @@ fun SolicitudCreateScreen(
 
     val allSections = listOf(materialsSection, toolsSection, eppSection)
     val totalItems = allSections.sumOf { it.items.size }
-    val activeSections = when (selectedTab) {
-        RequestTab.Materials -> listOf(materialsSection)
-        RequestTab.Tools -> listOf(toolsSection)
-        RequestTab.Epp -> listOf(eppSection)
+    val activeSections = if (isGastoFlow) {
+        listOf(materialsSection, toolsSection, eppSection)
+    } else {
+        when (selectedTab) {
+            RequestTab.Materials -> listOf(materialsSection)
+            RequestTab.Tools -> listOf(toolsSection)
+            RequestTab.Epp -> listOf(eppSection)
+        }
+    }
+
+    LaunchedEffect(isGastoFlow) {
+        if (!isGastoFlow) return@LaunchedEffect
+        val gastoTabs = listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
+        gastoTabs.forEach { tab ->
+            val targetAreaId = tab.areaId
+            val targetResponsable = tab.inventoryResponsable
+            if (optionsByArea.containsKey(targetAreaId)) return@forEach
+
+            loadingAreaId = targetAreaId
+            optionsErrorByArea.remove(targetAreaId)
+
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    SolicitudesRemoteDataSource.getInventarioProductos(targetResponsable)
+                }
+
+                if (response.isSuccessful) {
+                    val remoteOptions = withContext(Dispatchers.Default) {
+                        extractInventoryOptionsForArea(
+                            root = response.body(),
+                            targetAreaId = targetAreaId,
+                            excludedProductIds = if (tab == RequestTab.Epp && isAlmacenFlow) {
+                                hiddenEppBootIdsForAlmacen
+                            } else {
+                                emptySet()
+                            }
+                        )
+                    }
+                    if (remoteOptions.isNotEmpty()) {
+                        optionsByArea[targetAreaId] = remoteOptions
+                    } else {
+                        optionsErrorByArea[targetAreaId] =
+                            "Sin items remotos con ID para $targetResponsable. No se podra enviar hasta recargar."
+                    }
+                } else {
+                    optionsErrorByArea[targetAreaId] =
+                        "No se pudo cargar inventario de $targetResponsable (${response.code()}). No se podra enviar hasta recargar."
+                }
+            } catch (_: Exception) {
+                optionsErrorByArea[targetAreaId] =
+                    "Sin conexion al inventario de $targetResponsable. No se podra enviar hasta recargar."
+            } finally {
+                if (loadingAreaId == targetAreaId) {
+                    loadingAreaId = null
+                }
+            }
+        }
     }
     val allItems = allSections.flatMap { it.items }
     val canSubmit = totalItems > 0 && allItems.all {
         it.quantity.toIntOrNull()?.let { value -> value > 0 } == true &&
-            it.selectedInventoryId != null &&
-            it.description.isNotBlank() &&
+            (
+                if (isGastoFlow && it.isNewProduct) {
+                    it.newProductName.isNotBlank()
+                } else {
+                    it.selectedInventoryId != null && it.description.isNotBlank()
+                }
+            ) &&
             (isGastoFlow || !it.requiresPreviousProductPhoto || it.hasAttachedPhoto())
     }
     val confirmationSections = buildRequestConfirmationSections(allSections)
@@ -459,7 +526,8 @@ fun SolicitudCreateScreen(
                         sections = allSections,
                         baseFields = baseFields,
                         solicitanteUserId = solicitanteUserId,
-                        context = context
+                        context = context,
+                        allowNewProduct = false
                     )
                 }
             }
@@ -483,7 +551,7 @@ fun SolicitudCreateScreen(
         containerColor = ScreenBackground,
         topBar = {
             AppHeader(
-                title = "Solicitudes",
+                title = screenTitle,
                 showBackButton = true,
                 showNotificationButton = false,
                 onBackClick = onHomeClick,
@@ -503,7 +571,7 @@ fun SolicitudCreateScreen(
                 item {
                     val flowLabel = when {
                         isEppOnlyFlow -> "Solicitud de Botas de seguridad"
-                        isGastoFlow -> "Solicitud de Gasto"
+                        isGastoFlow -> "Solicitud de Compras"
                         isAlmacenFlow -> "Solicitud de Economato"
                         else -> "Nueva solicitud"
                     }
@@ -532,35 +600,37 @@ fun SolicitudCreateScreen(
                     }
                 }
 
-                item {
-                    val requestTabs = remember {
-                        if (isEppOnlyFlow) listOf(RequestTab.Epp) else listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
-                    }
-                    val selectedTabIndex = requestTabs.indexOf(selectedTab).coerceAtLeast(0)
-                    TabRow(
-                        selectedTabIndex = selectedTabIndex,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
-                        containerColor = Color.White,
-                        divider = {
-                            HorizontalDivider(color = BrandBorder)
+                if (!isGastoFlow) {
+                    item {
+                        val requestTabs = remember {
+                            if (isEppOnlyFlow) listOf(RequestTab.Epp) else listOf(RequestTab.Materials, RequestTab.Tools, RequestTab.Epp)
                         }
-                    ) {
-                        requestTabs.forEach { tab ->
-                            Tab(
-                                selected = selectedTab == tab,
-                                onClick = { selectedTab = tab },
-                                selectedContentColor = tab.accent,
-                                unselectedContentColor = BrandMuted,
-                                text = {
-                                    Text(
-                                        text = tab.label,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            )
+                        val selectedTabIndex = requestTabs.indexOf(selectedTab).coerceAtLeast(0)
+                        TabRow(
+                            selectedTabIndex = selectedTabIndex,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            containerColor = Color.White,
+                            divider = {
+                                HorizontalDivider(color = BrandBorder)
+                            }
+                        ) {
+                            requestTabs.forEach { tab ->
+                                Tab(
+                                    selected = selectedTab == tab,
+                                    onClick = { selectedTab = tab },
+                                    selectedContentColor = tab.accent,
+                                    unselectedContentColor = BrandMuted,
+                                    text = {
+                                        Text(
+                                            text = tab.label,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -603,80 +673,112 @@ fun SolicitudCreateScreen(
 
                 activeSections.forEach { section ->
                     item {
-                        val sectionOptions = if (section.tab == RequestTab.Epp && isEppOnlyFlow) {
-                            section.options
-                        } else {
-                            val baseOptions = optionsByArea[section.tab.areaId].orEmpty().ifEmpty { section.options }
-                            if (section.tab == RequestTab.Epp && isAlmacenFlow) {
-                                baseOptions.filterNot { option ->
-                                    option.inventoryId != null && option.inventoryId in hiddenEppBootIdsForAlmacen
-                                }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = section.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TitleColor,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            val sectionOptions = if (section.tab == RequestTab.Epp && isEppOnlyFlow) {
+                                section.options
                             } else {
-                                baseOptions
-                            }
-                        }
-                        RequestForm(
-                            section = section,
-                            options = sectionOptions,
-                            submitAttempted = submitAttempted,
-                            expandedItemId = expandedItemId,
-                            onExpandedItemIdChange = { expandedItemId = it },
-                            onAddItem = { section.items.add(MaterialItemForm()) },
-                            onDeleteItem = { index ->
-                                if (index in section.items.indices) {
-                                    val removedId = section.items[index].id
-                                    section.items.removeAt(index)
-                                    if (expandedItemId == removedId) {
-                                        expandedItemId = null
-                                    }
-                                }
-                            },
-                            onQuantityChange = { index, value ->
-                                if (index in section.items.indices) {
-                                    section.items[index] = section.items[index].copy(quantity = value)
-                                }
-                            },
-                            onDescriptionChange = { index, value ->
-                                if (index in section.items.indices) {
-                                    section.items[index] = section.items[index].copy(
-                                        selectedInventoryId = value.inventoryId,
-                                        selectedAreaId = value.areaId,
-                                        description = value.label,
-                                        requiresPreviousProductPhoto = value.requiresPreviousProductPhoto
-                                    )
-                                }
-                            },
-                            onObservationsChange = { index, value ->
-                                if (index in section.items.indices) {
-                                    section.items[index] = section.items[index].copy(observations = value)
-                                }
-                            },
-                            onPhotoChange = { index, uri, bitmap ->
-                                if (index in section.items.indices) {
-                                    section.items[index] = section.items[index].copy(
-                                        photoUri = uri,
-                                        photoBitmap = bitmap
-                                    )
-                                }
-                            },
-                            onCameraLaunchError = { message ->
-                                scope.launch { snackbarHostState.showSnackbar(message) }
-                            },
-                            onSubmit = {
-                                submitAttempted = true
-                                if (!canSubmit) {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Completa los campos requeridos")
+                                val baseOptions = optionsByArea[section.tab.areaId].orEmpty().ifEmpty { section.options }
+                                if (section.tab == RequestTab.Epp && isAlmacenFlow) {
+                                    baseOptions.filterNot { option ->
+                                        option.inventoryId != null && option.inventoryId in hiddenEppBootIdsForAlmacen
                                     }
                                 } else {
-                                    showConfirmDialog = true
+                                    baseOptions
                                 }
-                            },
-                            enabledSubmit = totalItems > 0 && !isSubmitting,
-                            isSubmitting = isSubmitting,
-                            isGastoFlow = isGastoFlow,
-                            singleItemFlow = isEppOnlyFlow && selectedTab == RequestTab.Epp
-                        )
+                            }
+                            RequestForm(
+                                section = section,
+                                options = sectionOptions,
+                                submitAttempted = submitAttempted,
+                                expandedItemId = expandedItemId,
+                                onExpandedItemIdChange = { expandedItemId = it },
+                                onAddItem = { section.items.add(MaterialItemForm()) },
+                                onDeleteItem = { index ->
+                                    if (index in section.items.indices) {
+                                        val removedId = section.items[index].id
+                                        section.items.removeAt(index)
+                                        if (expandedItemId == removedId) {
+                                            expandedItemId = null
+                                        }
+                                    }
+                                },
+                                onQuantityChange = { index, value ->
+                                    if (index in section.items.indices) {
+                                        section.items[index] = section.items[index].copy(quantity = value)
+                                    }
+                                },
+                                onDescriptionChange = { index, value ->
+                                    if (index in section.items.indices) {
+                                        section.items[index] = section.items[index].copy(
+                                            selectedInventoryId = value.inventoryId,
+                                            selectedAreaId = value.areaId,
+                                            isNewProduct = false,
+                                            newProductName = "",
+                                            description = value.label,
+                                            requiresPreviousProductPhoto = value.requiresPreviousProductPhoto
+                                        )
+                                    }
+                                },
+                                onUseNewProductChange = { index, checked ->
+                                    if (index in section.items.indices) {
+                                        val current = section.items[index]
+                                        section.items[index] = current.copy(
+                                            isNewProduct = checked,
+                                            selectedInventoryId = if (checked) null else current.selectedInventoryId,
+                                            selectedAreaId = if (checked) null else current.selectedAreaId,
+                                            description = if (checked) "" else current.description,
+                                            requiresPreviousProductPhoto = if (checked) false else current.requiresPreviousProductPhoto
+                                        )
+                                    }
+                                },
+                                onNewProductNameChange = { index, value ->
+                                    if (index in section.items.indices) {
+                                        section.items[index] = section.items[index].copy(newProductName = value)
+                                    }
+                                },
+                                onObservationsChange = { index, value ->
+                                    if (index in section.items.indices) {
+                                        section.items[index] = section.items[index].copy(observations = value)
+                                    }
+                                },
+                                onPhotoChange = { index, uri, bitmap ->
+                                    if (index in section.items.indices) {
+                                        section.items[index] = section.items[index].copy(
+                                            photoUri = uri,
+                                            photoBitmap = bitmap
+                                        )
+                                    }
+                                },
+                                onCameraLaunchError = { message ->
+                                    scope.launch { snackbarHostState.showSnackbar(message) }
+                                },
+                                onSubmit = {
+                                    submitAttempted = true
+                                    if (!canSubmit) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Completa los campos requeridos")
+                                        }
+                                    } else {
+                                        showConfirmDialog = true
+                                    }
+                                },
+                                enabledSubmit = totalItems > 0 && !isSubmitting,
+                                isSubmitting = isSubmitting,
+                                isGastoFlow = isGastoFlow,
+                                singleItemFlow = isEppOnlyFlow && selectedTab == RequestTab.Epp,
+                                allowNewProduct = isGastoFlow
+                            )
+                        }
                     }
                 }
             }
@@ -1097,6 +1199,8 @@ private fun RequestForm(
     onDeleteItem: (Int) -> Unit,
     onQuantityChange: (Int, String) -> Unit,
     onDescriptionChange: (Int, InventoryOption) -> Unit,
+    onUseNewProductChange: (Int, Boolean) -> Unit,
+    onNewProductNameChange: (Int, String) -> Unit,
     onObservationsChange: (Int, String) -> Unit,
     onPhotoChange: (Int, String?, Bitmap?) -> Unit,
     onCameraLaunchError: (String) -> Unit,
@@ -1104,7 +1208,8 @@ private fun RequestForm(
     enabledSubmit: Boolean,
     isSubmitting: Boolean,
     isGastoFlow: Boolean = false,
-    singleItemFlow: Boolean = false
+    singleItemFlow: Boolean = false,
+    allowNewProduct: Boolean = false
 ) {
     val context = LocalContext.current
     var pendingPhotoIndex by remember { mutableStateOf<Int?>(null) }
@@ -1193,6 +1298,8 @@ private fun RequestForm(
                         onAdd = onAddItem,
                         onQuantityChange = { value -> onQuantityChange(index, value) },
                         onDescriptionChange = { value -> onDescriptionChange(index, value) },
+                        onUseNewProductChange = { checked -> onUseNewProductChange(index, checked) },
+                        onNewProductNameChange = { value -> onNewProductNameChange(index, value) },
                         onObservationsChange = { value -> onObservationsChange(index, value) },
                         onGalleryPhotoClick = {
                             pendingPhotoIndex = index
@@ -1222,6 +1329,7 @@ private fun RequestForm(
                                 }
                         },
                         isGastoFlow = isGastoFlow,
+                        allowNewProduct = allowNewProduct,
                         showValidation = submitAttempted,
                         showAddButton = !singleItemFlow,
                         showDeleteButton = !singleItemFlow,
@@ -1255,19 +1363,22 @@ private suspend fun submitCompleteRequest(
     sections: List<RequestSectionState>,
     baseFields: SolicitudBaseFields,
     solicitanteUserId: Int,
-    context: android.content.Context
+    context: android.content.Context,
+    allowNewProduct: Boolean
 ): SubmitRequestResult {
     val multipartParts = mutableListOf<MultipartBody.Part>()
     sections.forEach { section ->
         appendSectionParts(
             section = section,
             context = context,
-            multipartParts = multipartParts
+            multipartParts = multipartParts,
+            allowNewProduct = allowNewProduct
         )
     }
 
     val hasValidProducts = multipartParts.any {
-        it.headers?.toString()?.contains("id_producto_") == true
+        val headers = it.headers?.toString().orEmpty()
+        headers.contains("id_producto_") || headers.contains("nuevo_producto")
     }
     if (!hasValidProducts) {
         return SubmitRequestResult(
@@ -1343,13 +1454,15 @@ private suspend fun submitSolicitudGastoGeneralRequest(
     backendErrorMessage: String,
     backendSuccessMessage: String
 ): SubmitRequestResult {
-    val validItems = mutableListOf<Triple<Int, MaterialItemForm, Pair<Int, Int>>>()
+    val validItems = mutableListOf<Pair<Int, MaterialItemForm>>()
     var detailIndex = 0
     sections.forEach { section ->
         section.items.forEach { item ->
-            val productId = item.selectedInventoryId ?: return@forEach
             val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEach
-            validItems += Triple(detailIndex, item, productId to cantidad)
+            val hasSelectedProduct = item.selectedInventoryId != null
+            val hasNewProduct = item.isNewProduct && item.newProductName.isNotBlank()
+            if (!hasSelectedProduct && !hasNewProduct) return@forEach
+            validItems += detailIndex to item
             detailIndex += 1
         }
     }
@@ -1370,12 +1483,13 @@ private suspend fun submitSolicitudGastoGeneralRequest(
             motivo = motivo
         )
 
-        validItems.forEach { (index, item, idCantidad) ->
-            val (productId, cantidad) = idCantidad
+        validItems.forEach { (index, item) ->
+            val cantidad = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEach
             appendSolicitudGastoDetalleParts(
                 parts = parts,
                 detailIndex = index,
-                idProducto = productId,
+                idProducto = item.selectedInventoryId,
+                nuevoProducto = item.newProductName.takeIf { item.isNewProduct && it.isNotBlank() },
                 cantidad = cantidad,
                 precioEstimado = 0.0,
                 precioReal = 0.0,
@@ -1454,16 +1568,25 @@ private fun appendSolicitudGastoBaseParts(
 private fun appendSolicitudGastoDetalleParts(
     parts: MutableList<MultipartBody.Part>,
     detailIndex: Int,
-    idProducto: Int,
+    idProducto: Int?,
+    nuevoProducto: String?,
     cantidad: Int,
     precioEstimado: Double?,
     precioReal: Double?,
     descripcionAdicional: String?
 ) {
-    parts += MultipartBody.Part.createFormData(
-        "solicitud_gasto_detalles[$detailIndex][id_producto]",
-        idProducto.toString()
-    )
+    idProducto?.let {
+        parts += MultipartBody.Part.createFormData(
+            "solicitud_gasto_detalles[$detailIndex][id_producto]",
+            it.toString()
+        )
+    }
+    nuevoProducto?.takeIf { it.isNotBlank() }?.let {
+        parts += MultipartBody.Part.createFormData(
+            "solicitud_gasto_detalles[$detailIndex][nuevo_producto]",
+            it.trim()
+        )
+    }
     parts += MultipartBody.Part.createFormData(
         "solicitud_gasto_detalles[$detailIndex][cantidad]",
         cantidad.toString()
@@ -1550,21 +1673,33 @@ private fun buildSolicitudGastoArchivoPart(
 private fun appendSectionParts(
     section: RequestSectionState,
     context: android.content.Context,
-    multipartParts: MutableList<MultipartBody.Part>
+    multipartParts: MutableList<MultipartBody.Part>,
+    allowNewProduct: Boolean
 ) {
     section.items.forEachIndexed { index, item ->
-        val inventoryId = item.selectedInventoryId ?: return@forEachIndexed
         val quantityValue = item.quantity.toIntOrNull()?.takeIf { it > 0 } ?: return@forEachIndexed
         val category = section.tab.submitCategoryKey
+        val usingNewProduct = allowNewProduct && item.isNewProduct && item.newProductName.isNotBlank()
+        val inventoryId = item.selectedInventoryId
+
+        if (!usingNewProduct && inventoryId == null) return@forEachIndexed
+
         Log.d(
             SOLICITUD_LOG_TAG,
-            "item[$index] categoria=$category id_producto=$inventoryId cantidad=$quantityValue id_area=${item.selectedAreaId} observacion='${item.observations}' fotoAdjunta=${item.hasAttachedPhoto()}"
+            "item[$index] categoria=$category id_producto=${inventoryId ?: "null"} nuevo_producto='${item.newProductName}' cantidad=$quantityValue id_area=${item.selectedAreaId} observacion='${item.observations}' fotoAdjunta=${item.hasAttachedPhoto()}"
         )
 
-        multipartParts += MultipartBody.Part.createFormData(
-            "id_producto_${category}[]",
-            inventoryId.toString()
-        )
+        if (usingNewProduct) {
+            multipartParts += MultipartBody.Part.createFormData(
+                "nuevo_producto[]",
+                item.newProductName.trim()
+            )
+        } else if (inventoryId != null) {
+            multipartParts += MultipartBody.Part.createFormData(
+                "id_producto_${category}[]",
+                inventoryId.toString()
+            )
+        }
         multipartParts += MultipartBody.Part.createFormData(
             "cantidad_${category}[]",
             quantityValue.toString()
@@ -1677,10 +1812,13 @@ private fun MaterialItemCard(
     onAdd: () -> Unit,
     onQuantityChange: (String) -> Unit,
     onDescriptionChange: (InventoryOption) -> Unit,
+    onUseNewProductChange: (Boolean) -> Unit,
+    onNewProductNameChange: (String) -> Unit,
     onObservationsChange: (String) -> Unit,
     onGalleryPhotoClick: () -> Unit,
     onCameraPhotoClick: () -> Unit,
     isGastoFlow: Boolean = false,
+    allowNewProduct: Boolean = false,
     showValidation: Boolean,
     showAddButton: Boolean = true,
     showDeleteButton: Boolean = true,
@@ -1695,14 +1833,13 @@ private fun MaterialItemCard(
         item.quantity.isNotBlank() && !quantityValid -> "Debe ser mayor a 0"
         else -> null
     }
-    val descriptionError = if (
-        showValidation &&
-        (item.description.isBlank() || item.selectedInventoryId == null)
-    ) {
-        "Selecciona un item valido"
-    } else {
-        null
-    }
+    val descriptionError = if (showValidation) {
+        if (allowNewProduct && item.isNewProduct) {
+            if (item.newProductName.isBlank()) "Ingresa el nombre del producto" else null
+        } else {
+            if (item.description.isBlank() || item.selectedInventoryId == null) "Selecciona un item valido" else null
+        }
+    } else null
     val photoRequiredError = if (
         showValidation &&
         item.requiresPreviousProductPhoto &&
@@ -1766,15 +1903,52 @@ private fun MaterialItemCard(
             }
         }
 
-        DescriptionDropdownField(
-            value = item.description,
-            options = options,
-            expanded = expanded,
-            onExpandedChange = onExpandedChange,
-            onValueSelected = onDescriptionChange,
-            isError = descriptionError != null,
-            supportingText = descriptionError
-        )
+        if (allowNewProduct) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = item.isNewProduct,
+                    onCheckedChange = onUseNewProductChange
+                )
+                Text(
+                    text = "No encuentro el producto en el listado",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TitleColor
+                )
+            }
+        }
+
+        if (allowNewProduct && item.isNewProduct) {
+            OutlinedTextField(
+                value = item.newProductName,
+                onValueChange = onNewProductNameChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Nombre del producto") },
+                placeholder = { Text("Escribe el nombre del producto") },
+                singleLine = true,
+                isError = descriptionError != null,
+                supportingText = descriptionError?.let { { Text(text = it, color = MaterialTheme.colorScheme.error) } },
+                shape = RoundedCornerShape(18.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF3F4F6),
+                    unfocusedContainerColor = Color(0xFFF3F4F6),
+                    disabledContainerColor = Color(0xFFF3F4F6),
+                    errorContainerColor = Color(0xFFF3F4F6)
+                )
+            )
+        } else {
+            DescriptionDropdownField(
+                value = item.description,
+                options = options,
+                expanded = expanded,
+                onExpandedChange = onExpandedChange,
+                onValueSelected = onDescriptionChange,
+                isError = descriptionError != null,
+                supportingText = descriptionError
+            )
+        }
 
         OutlinedTextField(
             value = item.quantity,

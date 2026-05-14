@@ -65,6 +65,7 @@ import com.cechriza.app.ui.login.LoginScreen
 import com.cechriza.app.ui.memory.MemoryMatchScreen
 import com.cechriza.app.ui.solicitudes.create.SolicitudCreateScreen
 import com.cechriza.app.ui.solicitudes.comprobante.ComprobanteFormScreen
+import com.cechriza.app.ui.solicitudes.gasto.GastoCreateScreen
 import com.cechriza.app.ui.solicitudes.list.SolicitudListScreen
 import com.cechriza.app.ui.solicitudes.qr.QrScannerScreen
 import kotlinx.coroutines.delay
@@ -235,6 +236,8 @@ fun AppNavigation(navController: NavHostController) {
                         } else {
                             navController.navigate("comprobante_form/-1")
                         }
+                    } else if (preset.trim().lowercase() == "gasto") {
+                        navController.navigate("solicitudes_gasto_create")
                     } else {
                         navController.navigate("solicitudes_create/$preset")
                     }
@@ -266,6 +269,14 @@ fun AppNavigation(navController: NavHostController) {
                     returnToPrevious()
                 },
                 initialPreset = preset
+            )
+        }
+
+        composable("solicitudes_gasto_create") {
+            GastoCreateScreen(
+                onHomeClick = returnToPrevious,
+                onNotificationsClick = returnToPrevious,
+                onRegisterSuccess = returnToPrevious
             )
         }
 
@@ -471,6 +482,8 @@ fun ContentScreen(
                     } else {
                         navController.navigate("comprobante_form/-1")
                     }
+                } else if (preset.trim().lowercase() == "gasto") {
+                    navController.navigate("solicitudes_gasto_create")
                 } else {
                     navController.navigate("solicitudes_create/$preset")
                 }

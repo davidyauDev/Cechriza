@@ -3,6 +3,7 @@ package com.cechriza.app.data.remote.solicitudes
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.cechriza.app.BuildConfig
 import com.cechriza.app.data.preferences.SessionManager
 import com.cechriza.app.data.remote.network.ApiService
 import com.cechriza.app.data.remote.network.RetrofitClient
@@ -20,9 +21,16 @@ internal object SolicitudesRemoteDataSource {
     private const val OSTICKET_BASE_URL = "https://osticket.cechriza.com"
     private const val DESCARGAR_COMPROMISO_URL = "$OSTICKET_BASE_URL/system/vista/ajax/feature/pedidos/api/descargar_compromiso.php"
     private const val SUBIR_ACTA_FIRMADA_URL = "$OSTICKET_BASE_URL/system/vista/ajax/feature/pedidos/api/subir_acta_firmada.php"
+    private const val COURIER_SHALOM_URL = "$OSTICKET_BASE_URL/system/vista/ajax/feature/pedidos/api/courier_shalom.php"
+    private const val COURIER_OLVA_URL = "$OSTICKET_BASE_URL/system/vista/ajax/feature/pedidos/api/courier_olva.php"
+    private const val COURIER_OTROS_URL = "$OSTICKET_BASE_URL/system/vista/ajax/feature/pedidos/api/courier_otros.php"
 
     private fun api(): ApiService {
         return RetrofitClient.apiWithToken { SessionManager.token }
+    }
+
+    private fun publicApi(): ApiService {
+        return RetrofitClient.apiWithoutToken
     }
 
     suspend fun getSolicitudes(solicitanteUserId: Int): Response<JsonElement> {
@@ -104,6 +112,25 @@ internal object SolicitudesRemoteDataSource {
             numero = numero.toRequestBody(plainText),
             monto = monto.toRequestBody(plainText),
             archivo = archivoPart
+        )
+    }
+
+    suspend fun consultarCourierTracking(
+        solicitudId: Int,
+        empresaAgencia: String
+    ): Response<JsonElement> {
+        val normalizedAgency = empresaAgencia.trim().lowercase()
+        val endpointUrl = when {
+            "shalom" in normalizedAgency || "shalon" in normalizedAgency -> COURIER_SHALOM_URL
+            "olva" in normalizedAgency -> COURIER_OLVA_URL
+            else -> COURIER_OTROS_URL
+        }
+        val apiKey = BuildConfig.COURIER_MOBILE_API_KEY
+        return publicApi().consultarCourierTracking(
+            url = endpointUrl,
+            apiKey = apiKey,
+            authorization = "Bearer $apiKey",
+            body = mapOf("id_solicitud" to solicitudId)
         )
     }
 

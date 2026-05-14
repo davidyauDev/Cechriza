@@ -116,3 +116,18 @@ internal data class RequestEntry(
     val actaRrhhUrl: String?,
     val items: List<RequestItemLine>
 )
+
+internal data class CourierTrackingInfo(
+    val agencia: String,
+    val ticket: String?,
+    val numero: String?,
+    val codigo: String?,
+    val estadoGeneral: Int?,
+    val estadoNombre: String?,
+    val estadoActual: String?,
+    val fecha: String?,
+    val comprobanteUrl: String?,
+    val fallbackUrl: String?,
+    val comentario: String?,
+    val detalleManual: String?
+)
