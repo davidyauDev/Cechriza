@@ -507,6 +507,7 @@ internal fun RequestListCard(
     onScanQrClick: (() -> Unit)? = null,
     isDownloadingActa: Boolean = false
 ) {
+    val uriHandler = LocalUriHandler.current
     val firstItem = entry.items.firstOrNull()
     val extraItemsCount = (entry.items.size - 1).coerceAtLeast(0)
     val chipLabelOverride = if (entry.estadoGeneralId == 9) {
@@ -568,7 +569,8 @@ internal fun RequestListCard(
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    if (entry.subirActa && onDownloadActaClick != null) {
+                    val showActaButton = (entry.subirActa || entry.estadoGeneralId == 50) && onDownloadActaClick != null
+                    if (showActaButton) {
                         OutlinedButton(
                             onClick = onDownloadActaClick,
                             enabled = !isDownloadingActa,
@@ -606,7 +608,7 @@ internal fun RequestListCard(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
-                                        text = "Descargar acta",
+                                        text = if (entry.estadoGeneralId == 50) "Descarga acta EPP" else "Descargar acta",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -657,6 +659,18 @@ internal fun RequestListCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = BrandMuted
                 )
+            }
+            if (!entry.actaRrhhUrl.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    ActaEppLoadedBadge()
+                    TextButton(onClick = { uriHandler.openUri(entry.actaRrhhUrl) }) {
+                        Text("Ver acta")
+                    }
+                }
             }
 
             if (firstItem != null) {
@@ -773,6 +787,7 @@ internal fun RequestDetailPanel(
     isUploadingActa: Boolean = false,
     onUploadActaClick: ((solicitudId: Int, selectedFileUri: String) -> Unit)? = null
 ) {
+    val uriHandler = LocalUriHandler.current
     val pickPdfLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -791,6 +806,20 @@ internal fun RequestDetailPanel(
                 }
             }
             item { Text(text = "Items", style = MaterialTheme.typography.titleSmall, color = BrandText, fontWeight = FontWeight.SemiBold) }
+            if (!entry.actaRrhhUrl.isNullOrBlank()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        ActaEppLoadedBadge()
+                        TextButton(onClick = { uriHandler.openUri(entry.actaRrhhUrl) }) {
+                            Text("Ver acta")
+                        }
+                    }
+                }
+            }
             if (!entry.empresaAgencia.isNullOrBlank()) {
                 item {
                     CourierTrackingCard(
@@ -802,7 +831,7 @@ internal fun RequestDetailPanel(
                 }
             }
             items(entry.items, key = { it.id }) { item -> RequestItemCard(item = item) }
-            if (entry.subirActa && onUploadActaClick != null) {
+            if ((entry.subirActa || entry.estadoGeneralId == 50) && onUploadActaClick != null) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(
@@ -827,10 +856,16 @@ internal fun RequestDetailPanel(
                                         strokeWidth = 2.dp,
                                         color = Color.White
                                     )
-                                    Text("Subiendo acta...")
+                                    Text(
+                                        if (entry.estadoGeneralId == 50) {
+                                            "Subiendo acta EPP..."
+                                        } else {
+                                            "Subiendo acta..."
+                                        }
+                                    )
                                 }
                             } else {
-                                Text("Subir acta firmada")
+                                Text(if (entry.estadoGeneralId == 50) "Subir acta EPP" else "Subir acta firmada")
                             }
                         }
                         if (isUploadingActa) {
@@ -846,6 +881,34 @@ internal fun RequestDetailPanel(
             item {
                 OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, BrandBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandMuted)) { Text("Cerrar") }
             }
+        }
+    }
+}
+
+@Composable
+private fun ActaEppLoadedBadge() {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = Color(0xFFECFDF3),
+        border = BorderStroke(1.dp, Color(0xFFABEFC6))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = null,
+                tint = Color(0xFF067647),
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = "Acta EPP cargada",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF067647),
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

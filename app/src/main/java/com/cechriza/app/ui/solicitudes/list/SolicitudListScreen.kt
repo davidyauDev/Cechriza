@@ -436,7 +436,7 @@ fun SolicitudListScreen(
                     isUploadingActa = isUploadingActa,
                     onUploadActaClick = { solicitudId, selectedFileUri ->
                         val userId = SessionManager.staffId ?: SessionManager.userId
-                        if (userId == null || userId <= 0) {
+                        if (entry.estadoGeneralId != 50 && (userId == null || userId <= 0)) {
                             scope.launch { snackbarHostState.showSnackbar("No se encontro id de usuario") }
                         } else scope.launch {
                             val sourceUri = runCatching { Uri.parse(selectedFileUri) }.getOrNull()
@@ -457,11 +457,18 @@ fun SolicitudListScreen(
                             snackbarHostState.showSnackbar("Subiendo acta...")
                             val uploadResponse = withContext(Dispatchers.IO) {
                                 runCatching {
-                                    SolicitudesRemoteDataSource.subirActaFirmada(
-                                        solicitudId = solicitudId,
-                                        userId = userId,
-                                        actaPdfFile = tempPdf
-                                    )
+                                    if (entry.estadoGeneralId == 50) {
+                                        SolicitudesRemoteDataSource.uploadActaRrhh(
+                                            solicitudId = solicitudId,
+                                            actaPdfFile = tempPdf
+                                        )
+                                    } else {
+                                        SolicitudesRemoteDataSource.subirActaFirmada(
+                                            solicitudId = solicitudId,
+                                            userId = userId ?: 0,
+                                            actaPdfFile = tempPdf
+                                        )
+                                    }
                                 }.getOrNull()
                             }
                             val uploadBody = uploadResponse?.body()
@@ -576,20 +583,24 @@ private suspend fun downloadActaForEntry(
     snackbarHostState: SnackbarHostState,
     onPdfPreviewFallback: (File) -> Unit
 ) {
+    val shouldDownloadActaRrhh = entry.estadoGeneralId == 50
     val userId = SessionManager.staffId ?: SessionManager.userId
-    if (userId == null || userId <= 0) {
+    if (!shouldDownloadActaRrhh && (userId == null || userId <= 0)) {
         snackbarHostState.showSnackbar("No se encontro user_id de sesion")
         return
     }
-
     snackbarHostState.showSnackbar("Descargando acta...")
 
     val result = withContext(Dispatchers.IO) {
         runCatching {
-            SolicitudesRemoteDataSource.descargarCompromiso(
-                solicitudId = entry.solicitudId,
-                userId = userId
-            )
+            if (shouldDownloadActaRrhh) {
+                SolicitudesRemoteDataSource.descargarActaRrhh(solicitudId = entry.solicitudId)
+            } else {
+                SolicitudesRemoteDataSource.descargarCompromiso(
+                    solicitudId = entry.solicitudId,
+                    userId = userId ?: 0
+                )
+            }
         }
     }
     val response = result.getOrNull()
@@ -604,7 +615,11 @@ private suspend fun downloadActaForEntry(
 
     if (response.isSuccessful && contentType.contains("application/pdf") && body != null) {
         val fileName = extractFilenameFromContentDisposition(contentDisposition)
-            ?: "compromiso_${entry.solicitudId}.pdf"
+            ?: if (shouldDownloadActaRrhh) {
+                "acta_rrhh_${entry.solicitudId}.pdf"
+            } else {
+                "compromiso_${entry.solicitudId}.pdf"
+            }
         val pdfBytes = withContext(Dispatchers.IO) { runCatching { body.bytes() }.getOrNull() }
         if (pdfBytes == null || pdfBytes.isEmpty()) {
             snackbarHostState.showSnackbar("No se pudo leer el PDF descargado")

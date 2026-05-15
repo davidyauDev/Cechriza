@@ -10,9 +10,12 @@ class AuthInterceptor(private val tokenProvider: () -> String?) : Interceptor {
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val requestBuilder = chain.request().newBuilder()
+        val originalRequest = chain.request()
+        val requestBuilder = originalRequest.newBuilder()
 
-        requestBuilder.addHeader("Accept", "application/json")
+        if (originalRequest.header("Accept").isNullOrBlank()) {
+            requestBuilder.addHeader("Accept", "application/json")
+        }
         requestBuilder.addHeader("X-API-Key", COMPROMISO_API_KEY)
         tokenProvider()?.let { token ->
             requestBuilder.addHeader("Authorization", "Bearer $token")

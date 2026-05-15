@@ -45,11 +45,21 @@ internal object SolicitudesRemoteDataSource {
         return api().getInventarioProductos(responsable)
     }
 
+    suspend fun descargarActaRrhh(
+        solicitudId: Int
+    ): Response<ResponseBody> {
+        return api().descargarActaRrhh(solicitudId)
+    }
+
     suspend fun descargarCompromiso(
         solicitudId: Int,
         userId: Int
     ): Response<ResponseBody> {
-        return api().descargarCompromiso(DESCARGAR_COMPROMISO_URL, solicitudId, userId)
+        return api().descargarCompromiso(
+            url = DESCARGAR_COMPROMISO_URL,
+            solicitudId = solicitudId,
+            userId = userId
+        )
     }
 
     suspend fun subirActaFirmada(
@@ -63,6 +73,25 @@ internal object SolicitudesRemoteDataSource {
         val fileBody = actaPdfFile.asRequestBody("application/pdf".toMediaTypeOrNull())
         val filePart = MultipartBody.Part.createFormData("acta_pdf", actaPdfFile.name, fileBody)
         return api().subirActaFirmada(SUBIR_ACTA_FIRMADA_URL, solicitudPart, userPart, filePart)
+    }
+
+    suspend fun uploadActaRrhh(
+        solicitudId: Int,
+        actaPdfFile: File,
+        comentario: String? = null
+    ): Response<JsonElement> {
+        val plainText = "text/plain".toMediaTypeOrNull()
+        val fileBody = actaPdfFile.asRequestBody("application/pdf".toMediaTypeOrNull())
+        val filePart = MultipartBody.Part.createFormData("acta_rrhh", actaPdfFile.name, fileBody)
+        val comentarioPart = comentario
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.toRequestBody(plainText)
+        return api().uploadActaRrhh(
+            solicitudId = solicitudId,
+            actaRrhh = filePart,
+            comentario = comentarioPart
+        )
     }
 
     suspend fun registrarSolicitudGastoComprobante(

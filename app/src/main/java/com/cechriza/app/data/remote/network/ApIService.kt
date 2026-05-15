@@ -15,6 +15,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 import retrofit2.http.Path
@@ -121,6 +122,12 @@ interface ApiService {
         @Part archivo: MultipartBody.Part
     ): Response<JsonElement>
 
+    @Headers("Accept: application/pdf")
+    @GET("solicitudes/{id}/acta-rrhh/download")
+    suspend fun descargarActaRrhh(
+        @Path("id") solicitudId: Int
+    ): Response<ResponseBody>
+
     @GET
     suspend fun descargarCompromiso(
         @Url url: String,
@@ -135,6 +142,14 @@ interface ApiService {
         @Part("id_solicitud") solicitudId: RequestBody,
         @Part("id_usuario") userId: RequestBody,
         @Part actaPdf: MultipartBody.Part
+    ): Response<JsonElement>
+
+    @Multipart
+    @POST("solicitudes/{id}/acta-rrhh")
+    suspend fun uploadActaRrhh(
+        @Path("id") solicitudId: Int,
+        @Part actaRrhh: MultipartBody.Part,
+        @Part("acta_rrhh_comentario") comentario: RequestBody? = null
     ): Response<JsonElement>
 
     @POST
